@@ -1,0 +1,98 @@
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+@layer base {
+    :root {
+        --background: 40 33% 97%;
+        --foreground: 222 22% 11%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 22% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 22% 11%;
+        --primary: 153 43% 18%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 96 26% 92%;
+        --secondary-foreground: 153 43% 18%;
+        --muted: 210 20% 96%;
+        --muted-foreground: 215 16% 40%;
+        --accent: 30 94% 44%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 220 13% 91%;
+        --input: 220 13% 91%;
+        --ring: 153 43% 18%;
+        --chart-1: 153 43% 30%;
+        --chart-2: 30 94% 50%;
+        --chart-3: 197 37% 40%;
+        --chart-4: 43 74% 55%;
+        --chart-5: 340 60% 55%;
+        --radius: 0.75rem;
+    }
+    .dark {
+        --background: 222 30% 8%;
+        --foreground: 0 0% 98%;
+        --card: 222 25% 12%;
+        --card-foreground: 0 0% 98%;
+        --popover: 222 25% 12%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 153 43% 45%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 222 20% 18%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 222 20% 18%;
+        --muted-foreground: 215 16% 65%;
+        --accent: 30 94% 50%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 62% 45%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 222 20% 20%;
+        --input: 222 20% 20%;
+        --ring: 153 43% 45%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+    h1, h2, h3, .font-heading {
+        font-family: 'Cabinet Grotesk', sans-serif;
+    }
+}
+
+.admin-scope {
+    font-family: 'Inter', sans-serif;
+}
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+    [data-debug-wrapper="true"] > * {
+        margin-left: inherit; margin-right: inherit; margin-top: inherit; margin-bottom: inherit;
+        padding-left: inherit; padding-right: inherit; padding-top: inherit; padding-bottom: inherit;
+        column-gap: inherit; row-gap: inherit; gap: inherit;
+        border-left-width: inherit; border-right-width: inherit; border-top-width: inherit; border-bottom-width: inherit;
+        border-left-style: inherit; border-right-style: inherit; border-top-style: inherit; border-bottom-style: inherit;
+        border-left-color: inherit; border-right-color: inherit; border-top-color: inherit; border-bottom-color: inherit;
+    }
+}

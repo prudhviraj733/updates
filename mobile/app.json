@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "Freshly",
+    "slug": "freshly-grocery",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": { "backgroundColor": "#1B4332" },
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#1B4332" } },
+    "extra": { "backendUrl": "https://grocery-hub-1077.preview.emergentagent.com" }
+  }
+}

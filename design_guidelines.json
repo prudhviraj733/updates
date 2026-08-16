@@ -1,0 +1,135 @@
+{
+  "theme": "Light theme for the customer storefront to emphasize food freshness, trust, and hygiene. Light/Dark toggle support for the Admin Dashboard.",
+  "colors": {
+    "customer_storefront": {
+      "background": "#FAF9F6",
+      "surface": "#FFFFFF",
+      "primary": "#1B4332",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#E8F0E5",
+      "secondary_foreground": "#1B4332",
+      "accent": "#D97706",
+      "accent_foreground": "#FFFFFF",
+      "text_main": "#111827",
+      "text_muted": "#4B5563",
+      "border": "#E5E7EB",
+      "success": "#16A34A",
+      "warning": "#F59E0B",
+      "error": "#DC2626"
+    },
+    "admin_dashboard": {
+      "background": "#F3F4F6",
+      "surface": "#FFFFFF",
+      "primary": "#0F172A",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#F1F5F9",
+      "secondary_foreground": "#0F172A",
+      "text_main": "#0F172A",
+      "text_muted": "#64748B",
+      "border": "#E2E8F0"
+    }
+  },
+  "typography": {
+    "customer_storefront": {
+      "headings": {
+        "font_family": "Cabinet Grotesk, sans-serif",
+        "weights": ["500", "700", "800"],
+        "usage": "Use for hero text, section titles, product titles on PDP. Apply tracking-tight for sizes above text-2xl. DO NOT use generic fonts for headings."
+      },
+      "body": {
+        "font_family": "Outfit, sans-serif",
+        "weights": ["400", "500"],
+        "usage": "Use for descriptions, metadata, standard UI elements. Use leading-relaxed for body paragraphs."
+      }
+    },
+    "admin_dashboard": {
+      "headings": {
+        "font_family": "Inter, sans-serif",
+        "weights": ["600", "700"],
+        "usage": "Functional headings for tables, metrics, and page titles."
+      },
+      "body": {
+        "font_family": "Inter, sans-serif",
+        "weights": ["400", "500"],
+        "usage": "Clean geometric sans for maximum legibility in data-dense views."
+      }
+    }
+  },
+  "spacing_and_layout": {
+    "customer_storefront": {
+      "container": "Max-width optimized (max-w-7xl), generous padding (px-4 sm:px-6 lg:px-8).",
+      "grid": "Bento-grid for home page category highlights. Use standard fluid grids for product listings (grid-cols-2 md:grid-cols-3 lg:grid-cols-4). Gap-6 or gap-8.",
+      "hero": "Asymmetrical layout. Large product imagery overlapping soft geometric shapes. Avoid standard 50/50 splits.",
+      "product_cards": "Image container max height constraints to avoid dominating the viewport, specifically on mobile."
+    },
+    "admin_dashboard": {
+      "container": "Full width with fixed sidebar navigation.",
+      "grid": "High Density Grid (gap-4 or gap-6). Every pixel utilized.",
+      "tables": "Cardless design for data tables. Extend edge-to-edge within their containers with sharp 1px borders."
+    }
+  },
+  "components": {
+    "buttons": {
+      "customer": "Pill-shaped (rounded-full) for main CTAs. High contrast hover states (hover:-translate-y-0.5, shadow-md transition-all).",
+      "admin": "Subtle rounded-md. Purely functional. Focus rings mandatory."
+    },
+    "cards": {
+      "customer": "Subtle border (border-black/5), rounded-2xl, soft ambient shadow on hover.",
+      "admin": "Flat solid surfaces, 1px border-border, no drop shadows. Strictly structural."
+    },
+    "navigation": {
+      "customer": "Sticky header with Crystal Glassmorphism (backdrop-blur-xl bg-white/80, 1px bottom border). Ensure text is fully readable. DO NOT use pure transparent.",
+      "admin": "Fixed sidebar, solid background (bg-slate-900 text-white or bg-white border-r)."
+    },
+    "badges": {
+      "usage": "Prominent use for 'ASAP Delivery', 'Out of Stock', or 'Discount' tags. High saturation colors for visibility."
+    }
+  },
+  "visual_enhancers": {
+    "surfaces": "Use optical clarity for glass elements in the storefront. Flat solid surfaces in the functional admin side.",
+    "borders": "1px inner strokes for depth on storefront cards. Sharp borders for admin grid layouts.",
+    "motion": "Storefront: Smooth entrance animations for product grids, micro-interactions on add-to-cart buttons. Admin: Minimalist, immediate feedback without distracting animations."
+  },
+  "accessibility": {
+    "contrast": "Ensure minimum 4.5:1 ratio for standard text. Never use gray-on-gray for vital info.",
+    "testing": "All interactive elements (buttons, inputs, cart toggles, checkout steps) MUST include data-testid attributes for automated testing.",
+    "focus": "Always explicit focus states (focus:ring-2 focus:ring-offset-2 focus:ring-primary)."
+  },
+  "image_urls": {
+    "category_spices": {
+      "url": "https://images.unsplash.com/photo-1656497119922-068c6a5e1193?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHw0fHxpbmRpYW4lMjBzcGljZXMlMjBwb3dkZXJ8ZW58MHx8fHwxNzg2OTA1NTM5fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Vibrant Indian spices arranged in a traditional thali."
+    },
+    "category_dry_fruits": {
+      "url": "https://images.unsplash.com/photo-1600189020840-e9918c25269d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwxfHxkcnklMjBmcnVpdHMlMjBudXRzfGVufDB8fHx8MTc4NjkwNTUzOXww&ixlib=rb-4.1.0&q=85",
+      "description": "Rich assortment of dry fruits and nuts."
+    },
+    "category_rice": {
+      "url": "https://images.unsplash.com/photo-1586201375761-83865001e31c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwxfHxyaWNlJTIwZ3JhaW5zJTIwcmF3fGVufDB8fHx8MTc4NjkwNTUzOHww&ixlib=rb-4.1.0&q=85",
+      "description": "Raw, premium quality basmati rice grains."
+    }
+  },
+  "instructions_to_main_agent": [
+    "The project uses .js files, NOT .tsx files. Write React components in standard JSX/JS accordingly.",
+    "Prioritize building raw HTML + Tailwind for complex storefront layouts. Use Shadcn strictly for interactive logic (Forms, Modals, Select, Dialogs).",
+    "For the Admin dashboard, leverage Shadcn components heavily (Tables, Cards, Forms, Dropdowns) but keep them flat, cardless, and dense.",
+    "The 'ASAP' delivery option MUST be visually distinct from standard slot selections during checkout, using the Accent color.",
+    "In the Location Selector (header), prioritize a clean dropdown or a centered modal on first visit.",
+    "Use Lucide React (lucide-react) for generic icons, but consider Phosphor icons if more character is needed.",
+    "Do not use generic placeholders for images. Utilize the provided image_urls for category representations.",
+    "Implement the customer cart as a sliding drawer (Sheet component from Shadcn UI).",
+    "DO NOT use pure transparent backgrounds for overlays, headers, or dropdowns. Always use a solid color or heavy glassmorphism to preserve readability."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic outputs. Break the mold. Use 2-3x more spacing than usual.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects carefully with backdrop filters, avoiding transparent overlays that muddy text.",
+    "Do NOT apply universal transitions (transition: all). Target specific properties like opacity, transform, and background-color.",
+    "Do NOT center align the app container (.App { text-align: center; } is banned). Left-align dense content.",
+    "Never use AI assistant Emoji characters (🤖, 💡, 🎯, etc.) for icons.",
+    "Ensure hover states exist on all interactive elements. Static UIs feel dead.",
+    "Use 'sonner' for all toast notifications.",
+    "Add data-testid attributes to all form inputs, buttons, and navigation links for robust testing.",
+    "Always rely on optical alignment rather than strict geometrical alignment for elements like icons inside buttons."
+  ]
+}

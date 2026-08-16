@@ -1,0 +1,52 @@
+{
+  "summary": "Full-stack testing of Freshly Grocery MVP. Backend: 33/34 pytest passed (1 skipped - ASAP outside window, 1 failed - brute-force lockout). Frontend storefront and admin dashboard load cleanly, admin login works, all 11 admin pages render without errors, cart drawer works, add-to-cart requires auth as expected. UI checkout could not complete via automation because IST-time-of-run put all slots as past leadtime and ASAP outside operating hours (a legitimate timing constraint, not a bug in the flow itself — API-level checkout tested successfully via pytest).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/auth/login",
+        "issue": "Brute-force lockout is INEFFECTIVE behind ingress/proxy. Lockout identifier is 'request.client.host + email', but request.client.host is the immediate proxy pod IP (e.g., 10.208.135.194 / 10.208.135.198) which rotates per request across ingress replicas. Repeated wrong logins (tested 6+) all return 401 and never 429. Attackers can brute-force freely. Fix: use X-Forwarded-For first hop (or lock by email only, or by email + X-Real-IP).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Checkout slot selection when browser TZ differs from IST",
+        "issue": "Checkout page requests slots for 'today' derived from browser local date (UTC in test env). Backend computes availability in Asia/Kolkata. When IST rolls into the next day (~00:00-02:30 IST) but the browser is still in the previous UTC date, the checkout shows 'No slots available today. Try ASAP delivery if offered.' while ASAP may also be disabled (outside 09:00-21:00 IST). Recommendation: compute the checkout 'today' using Asia/Kolkata timezone so it matches the backend's slot computation, and/or allow user to pick a next-day slot when today has none.",
+        "affected_selectors": ["[data-testid^='slot-']", "[data-testid='delivery-asap-option']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix brute-force lockout identifier to properly identify the client behind the ingress proxy (use X-Forwarded-For or lock by email). Currently the security control is a no-op in this environment.",
+    "In frontend Checkout.js, compute the 'today' date string using the Asia/Kolkata timezone (not the browser local timezone) so requested slots align with backend's IST-based availability."
+  ],
+  "critical_code_review_comments": [
+    "auth.py: login_attempts identifier = ip:email using request.client.host works only when the app is exposed directly. Behind an ingress, this must trust X-Forwarded-For. Also consider locking per-account (email only) with capped total attempts.",
+    "orders.py: _reserve_inventory rolls back on failure but is not truly atomic (no MongoDB transaction). Concurrent stock races are possible. For MVP acceptable, but note.",
+    "coupons.py validate_coupon: start_date/end_date comparisons use datetime.now().isoformat() (naive) vs stored ISO strings — timezone mismatch may cause coupons to appear active/expired incorrectly at UTC boundaries.",
+    "delivery.py compute_slots: max_orders_per_slot check runs count_documents per slot — N+1 query pattern, fine for small volumes but should be aggregated.",
+    "products.py enrich uses N+1 inventory queries in list endpoints — for larger catalogs consider $lookup or batched fetch.",
+    "wishlist.py get_wishlist: discount_percent duplicates logic already in products.enrich — extract shared helper.",
+    "payments.py webhook: does not update order status even when signature is valid — appears incomplete (only returns ok).",
+    "settings.py: no admin_settings_toggle protection against removing keys; PUT filters None values but should probably persist explicit false too (Optional[bool]=None conflates 'unset' vs 'set to false' — currently works only because pydantic defaults are None)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (new comprehensive regression suite, 35 tests)"
+  ],
+  "success_rate": {"backend": "97% (33/34, 1 skipped by design)", "frontend": "~90% (all pages load, admin flow OK; checkout completion untested via UI due to IST window)"},
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345 works. Registered ephemeral test customers with random emails for isolation.",
+  "seed_data_creation": "Test data created inside pytest: multiple TEST_ prefixed customers/orders. TEST_LOC location and TEST_CAT category are created and deleted within tests.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_backend.py — it covers auth, locations, categories, products, cart (with 409 stock check), wishlist, delivery slots + settings, coupons WELCOME50/SAVE10 including caps, full COD checkout with inventory reservation, ASAP order (skipped outside IST window), admin order status transitions (cancel restores stock, delivered marks paid), payments 503, security (403/401), dashboard, customers, inventory upsert, settings toggle. Only known failure: test_brute_force_lockout — will pass only after main agent fixes the client-IP identification behind the proxy.",
+  "rca of the issue": "Brute-force lockout key = f'{ip}:{email}' where ip = request.client.host. FastAPI/Starlette gives request.client.host = the peer of the TCP connection, which behind Kubernetes ingress is the ingress pod IP (varies across replicas per request). Therefore each of the 5+ failed attempts writes a fresh login_attempts document keyed to a different pod IP, and the count never reaches MAX_ATTEMPTS=5 for any single identifier. Repro: POST /api/auth/login with the same wrong email 7 times; observe backend logs — client host alternates and status is 401 every time. Mitigation: (a) trust the X-Forwarded-For header's leftmost IP (with ProxyHeadersMiddleware) or (b) use only the email as the identifier (with an IP-based secondary limiter) or (c) add a global rate-limiter middleware like slowapi keyed by X-Real-IP."
+}

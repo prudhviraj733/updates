@@ -1,0 +1,139 @@
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
+import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+
+const StoreContext = createContext(null);
+
+export function StoreProvider({ children }) {
+  const { user } = useAuth();
+  const [locations, setLocations] = useState([]);
+  const [location, setLocationState] = useState(null);
+  const [cart, setCart] = useState({ items: [], subtotal: 0, count: 0 });
+  const [wishlist, setWishlist] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+
+  useEffect(() => {
+    api.get("/locations").then(({ data }) => {
+      setLocations(data);
+      const saved = localStorage.getItem("location_id");
+      const found = data.find((l) => l.id === saved) || data[0];
+      if (found) {
+        setLocationState(found);
+        localStorage.setItem("location_id", found.id);
+      } else {
+        setLocationModalOpen(true);
+      }
+    });
+  }, []);
+
+  const setLocation = (loc) => {
+    setLocationState(loc);
+    localStorage.setItem("location_id", loc.id);
+    setLocationModalOpen(false);
+  };
+
+  const refreshCart = useCallback(async () => {
+    if (!user || user === false || !location) {
+      setCart({ items: [], subtotal: 0, count: 0 });
+      return;
+    }
+    try {
+      const { data } = await api.get(`/cart?location_id=${location.id}`);
+      setCart(data);
+    } catch {}
+  }, [user, location]);
+
+  const refreshWishlist = useCallback(async () => {
+    if (!user || user === false) {
+      setWishlist([]);
+      return;
+    }
+    try {
+      const { data } = await api.get("/wishlist");
+      setWishlist(data.map((p) => p.id));
+    } catch {}
+  }, [user]);
+
+  useEffect(() => {
+    refreshCart();
+    refreshWishlist();
+  }, [refreshCart, refreshWishlist]);
+
+  const requireAuth = () => {
+    if (!user || user === false) {
+      toast.error("Please sign in to continue");
+      return false;
+    }
+    return true;
+  };
+
+  const addToCart = async (product, qty = 1) => {
+    if (!requireAuth()) return false;
+    try {
+      const { data } = await api.post("/cart/items", {
+        product_id: product.id,
+        location_id: location.id,
+        quantity: qty,
+      });
+      setCart(data);
+      toast.success(`${product.name} added to cart`);
+      return true;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not add to cart");
+      return false;
+    }
+  };
+
+  const updateQty = async (productId, quantity) => {
+    try {
+      const { data } = await api.put(`/cart/items/${productId}`, {
+        location_id: location.id,
+        quantity,
+      });
+      setCart(data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not update quantity");
+    }
+  };
+
+  const removeItem = async (productId) => {
+    const { data } = await api.delete(`/cart/items/${productId}?location_id=${location.id}`);
+    setCart(data);
+  };
+
+  const clearCart = async () => {
+    if (!location) return;
+    const { data } = await api.delete(`/cart?location_id=${location.id}`);
+    setCart(data);
+  };
+
+  const toggleWishlist = async (productId) => {
+    if (!requireAuth()) return;
+    if (wishlist.includes(productId)) {
+      setWishlist((w) => w.filter((id) => id !== productId));
+      await api.delete(`/wishlist/${productId}`);
+    } else {
+      setWishlist((w) => [...w, productId]);
+      await api.post(`/wishlist/${productId}`);
+      toast.success("Added to wishlist");
+    }
+  };
+
+  return (
+    <StoreContext.Provider
+      value={{
+        locations, location, setLocation,
+        cart, refreshCart, addToCart, updateQty, removeItem, clearCart,
+        wishlist, toggleWishlist, refreshWishlist,
+        cartOpen, setCartOpen,
+        locationModalOpen, setLocationModalOpen,
+      }}
+    >
+      {children}
+    </StoreContext.Provider>
+  );
+}
+
+export const useStore = () => useContext(StoreContext);
