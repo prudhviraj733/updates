@@ -15,6 +15,7 @@ import Auth from "@/pages/store/Auth";
 import Checkout from "@/pages/store/Checkout";
 import Account from "@/pages/store/Account";
 import Wishlist from "@/pages/store/Wishlist";
+import ComboDetail from "@/pages/store/ComboDetail";
 import { Orders, OrderDetail } from "@/pages/store/Orders";
 
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -27,6 +28,7 @@ import AdminCustomers from "@/pages/admin/AdminCustomers";
 import AdminDelivery from "@/pages/admin/AdminDelivery";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
 import AdminPackages from "@/pages/admin/AdminPackages";
+import AdminComboBanners from "@/pages/admin/AdminComboBanners";
 import AdminPayments from "@/pages/admin/AdminPayments";
 import AdminSettings from "@/pages/admin/AdminSettings";
 
@@ -48,6 +50,7 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/product/:id" element={<ProductDetail />} />
+                <Route path="/combo/:id" element={<ComboDetail />} />
                 <Route path="/wishlist" element={<Wishlist />} />
                 <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
                 <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
@@ -66,6 +69,7 @@ function App() {
                 <Route path="delivery" element={<AdminDelivery />} />
                 <Route path="coupons" element={<AdminCoupons />} />
                 <Route path="packages" element={<AdminPackages />} />
+                <Route path="combo-banners" element={<AdminComboBanners />} />
                 <Route path="customers" element={<AdminCustomers />} />
                 <Route path="payments" element={<AdminPayments />} />
                 <Route path="settings" element={<AdminSettings />} />

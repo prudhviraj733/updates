@@ -1,0 +1,37 @@
+{
+  "summary": "Tested Monthly Combo Hero Carousel feature (backend + frontend). Backend: 17/17 pytest cases pass — covering public GET /api/combo-banners location filtering (empty=all, single, multi), active/inactive toggle, ordering by display_order, hide-when-empty behavior, max-5 cap (created 6 active banners scoped to primary location, API returned exactly 5), admin CRUD guarded by role, combo detail enrichment with products/items_value/savings, and regression on products/categories/locations/admin-orders/razorpay-disabled. Frontend: home carousel renders with 3 seeded banners, pagination dots (3), auto-rotation advances every ~4.5s (verified dot index 0->1 after 5s), clicking a banner navigates to /combo/<package_id>, combo detail shows hero/price/items and 'Add Combo to Cart' works with authenticated customer (items added). Admin /admin/combo-banners page lists 3 rows with correct data-testids; Add Banner dialog opens with all required fields (banner-package, banner-title, banner-image, banner-order, banner-active, save-banner-btn); creating TEST_UI_BANNER and deleting it via delete-banner-<id> works end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Home carousel + Combo detail", "issues": ["Seed 'Monthly Family Combo' has price ₹2,999 but sum of included products' selling prices is ~₹1,331, giving savings=0. As a result, the 'Save ₹X' badge (data-testid combo-savings-*) and combo-savings on detail page do not render for this seeded combo. Marketing intent of 'combo saves money' is not met by seed data. Consider either lowering the combo price below items_value or increasing product selection so items_value exceeds combo price."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_combo_banners.py",
+    "/app/test_reports/pytest/combo_banners.xml"
+  ],
+  "action_items": [
+    "Optional: adjust seeded 'Monthly Family Combo' pricing so items_value > price (currently items ~1331 vs price 2999) so savings badge shows for this combo on carousel & detail pages.",
+    "Optional cleanup: previous testing iterations left TEST_LOC_UPDATED / TEST_LOC_COMBO locations in DB (visible in admin banner dialog). Not blocking."
+  ],
+  "critical_code_review_comments": [
+    "combo_banners._enrich fetches per-product selling_price sequentially in a loop — for large combos this is N+1 queries. Consider a single $in query.",
+    "Public GET /api/combo-banners loads up to 200 banners into memory then filters — fine for now but could use MongoDB $or filter for scale.",
+    "ComboDetail.addAll issues sequential POST /cart/items per product; consider a bulk endpoint or Promise.all for UX speed.",
+    "No auth required to fetch /api/combo-banners which is correct (public), but no rate limiting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_combo_banners.py"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (all critical flows working)"},
+  "test_credentials": "Admin prudhvirajm847@gmail.com/Admin@12345, Customer customer@test.com/Test@12345 — both work.",
+  "seed_data_creation": "Test banners and one extra location (TEST_LOC_COMBO) created via admin API during tests; all cleaned up in fixture teardown except any leftover from prior iterations.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend combo-banners tests are in /app/backend/tests/test_combo_banners.py (17 tests, all pass). Feature complete. Only cosmetic observation: seeded Monthly Family Combo has price>items_value so 'Save' badge hidden — not a bug, but marketing seed data could be tuned."
+}

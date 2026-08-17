@@ -168,7 +168,49 @@ async def write_credentials():
     p.write_text(content)
 
 
+async def seed_combos_and_banners():
+    if await db.combo_banners.count_documents({}) > 0:
+        return
+    locs = await db.locations.find({"is_active": True}, {"_id": 0, "id": 1}).to_list(100)
+    loc_ids = [l["id"] for l in locs]
+
+    async def pid(sku):
+        p = await db.products.find_one({"sku": sku}, {"_id": 0, "id": 1})
+        return p["id"] if p else None
+
+    B1 = "https://images.unsplash.com/photo-1481016863889-534cbad65379?crop=entropy&cs=srgb&fm=jpg&q=85&w=1400"
+    B2 = "https://images.unsplash.com/photo-1556191041-c2401936d851?crop=entropy&cs=srgb&fm=jpg&q=85&w=1400"
+    B3 = "https://images.pexels.com/photos/8108018/pexels-photo-8108018.jpeg?auto=compress&cs=tinysrgb&w=1400"
+
+    combos = [
+        ("Monthly Family Combo", "Everything your family needs for the month", "Limited period offer",
+         1149, ["RICE-SON-10", "DAL-TOOR-1", "OIL-SUN-1", "FLR-ATTA-5", "SGR-REF-1", "SPC-TUR-200"], B1),
+        ("Breakfast Essentials Combo", "Start every morning right", "Save big this week",
+         899, ["FLR-ATTA-5", "OIL-GHEE-500", "GRC-TEA-500", "SGR-REF-1"], B2),
+        ("Premium Dry Fruits Combo", "Festive gifting & healthy snacking", "Festive special",
+         1499, ["DRY-ALM-500", "DRY-CAS-500", "NUT-PIS-250", "DRY-RAI-250"], B3),
+    ]
+    order = 0
+    for name, sub, promo, price, skus, img in combos:
+        ids = [x for x in [await pid(s) for s in skus] if x]
+        pkg_id = gen_id()
+        await db.packages.insert_one({
+            "id": pkg_id, "name": name, "description": sub, "image_url": img,
+            "package_type": "monthly", "product_ids": ids, "price": price,
+            "is_active": True, "location_ids": loc_ids,
+            "created_at": now_iso(), "updated_at": now_iso(),
+        })
+        await db.combo_banners.insert_one({
+            "id": gen_id(), "package_id": pkg_id, "title": name.upper(), "subtitle": sub,
+            "promo_text": promo, "cta_text": "View Combo", "image_url": img,
+            "display_order": order, "is_active": True, "location_ids": [],
+            "created_at": now_iso(), "updated_at": now_iso(),
+        })
+        order += 1
+
+
 async def run_seed():
     await seed_admin()
     await seed_data()
+    await seed_combos_and_banners()
     await write_credentials()

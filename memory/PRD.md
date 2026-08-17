@@ -56,6 +56,14 @@ Multi-location; dynamic categories; location-based inventory with safe reservati
 2. Add product/category image uploads.
 3. Next-day delivery slot support at checkout.
 
+## Iteration 3 (2026-06) — Monthly Combo Hero Carousel
+- Backend `combo_banners` collection + `GET /api/combo-banners?location_id` (active only, location-filtered: empty location_ids = all locations, else membership; sorted by display_order; capped at 5; enriched with package price/savings/item_count). Admin CRUD `/api/admin/combo-banners` (role-guarded). `GET /api/packages/{id}` combo detail with products + items_value + savings.
+- `ComboBannerInput` model; seed of 3 monthly combos + 3 all-location banners (prices tuned so savings show).
+- Storefront: `ComboCarousel` (embla + 4.5s autoplay pausing on drag, swipe, pagination dots) on Home after hero, hidden when empty. `/combo/:id` detail page with "Add Combo to Cart".
+- Admin: "Combo Banners" section — create/edit/delete, link a Monthly Combo, image upload, title/subtitle/promo/CTA/order/active + per-location visibility, live preview.
+- Mobile: `HomeScreen` FlatList paged carousel with autoplay + dots.
+- Verified 17/17 backend tests + all frontend flows (iteration_3). Location filtering, max-5 cap, hide-when-empty, ordering, activate/deactivate, admin guard all pass.
+
 ## Iteration 2 (2026-06) — Added
 - **Image uploads** (Emergent object storage): admin `POST /api/admin/upload` (admin-guarded, 5MB, image-only) → public URL served via `GET /api/files/{path}`; `ImageUpload` component wired into admin Products & Categories with live previews. Verified 44/44 tests.
 - **Next-day slots**: `GET /api/delivery/slots/range?days=N` (IST); checkout now shows date tabs (Today/Tomorrow/…) and can place next-day slot orders. Auto-selects first day with availability.

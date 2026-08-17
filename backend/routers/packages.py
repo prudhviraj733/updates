@@ -15,6 +15,28 @@ async def list_packages(location_id: str = None):
     return await db.packages.find(query, {"_id": 0}).to_list(200)
 
 
+@router.get("/packages/{package_id}")
+async def get_package(package_id: str):
+    pkg = await db.packages.find_one({"id": package_id, "is_active": True}, {"_id": 0})
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Combo not found")
+    products = []
+    total = 0.0
+    for pid in pkg.get("product_ids", []):
+        p = await db.products.find_one({"id": pid, "is_active": True}, {"_id": 0})
+        if p:
+            if p.get("mrp", 0) > p.get("selling_price", 0):
+                p["discount_percent"] = round((p["mrp"] - p["selling_price"]) / p["mrp"] * 100)
+            else:
+                p["discount_percent"] = 0
+            products.append(p)
+            total += p.get("selling_price", 0)
+    pkg["products"] = products
+    pkg["items_value"] = round(total, 2)
+    pkg["savings"] = round(max(0, total - pkg.get("price", 0)), 2)
+    return pkg
+
+
 @router.get("/admin/packages")
 async def admin_list_packages(admin: dict = Depends(require_admin)):
     return await db.packages.find({}, {"_id": 0}).to_list(500)

@@ -5,6 +5,7 @@ import { ArrowRight, Truck, Clock, ShieldCheck, Zap } from "lucide-react";
 import api from "@/lib/api";
 import { useStore } from "@/context/StoreContext";
 import { ProductCard } from "@/components/store/ProductCard";
+import { ComboCarousel } from "@/components/store/ComboCarousel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -13,6 +14,7 @@ export default function Home() {
   const { location } = useStore();
   const [categories, setCategories] = useState([]);
   const [featured, setFeatured] = useState([]);
+  const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,9 +23,11 @@ export default function Home() {
     Promise.all([
       api.get("/categories"),
       api.get(`/products?location_id=${location.id}&featured=true`),
-    ]).then(([c, f]) => {
+      api.get(`/combo-banners?location_id=${location.id}`),
+    ]).then(([c, f, b]) => {
       setCategories(c.data);
       setFeatured(f.data);
+      setBanners(b.data);
       setLoading(false);
     });
   }, [location]);
@@ -86,6 +90,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <ComboCarousel banners={banners} />
 
       {/* Categories */}
       <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">

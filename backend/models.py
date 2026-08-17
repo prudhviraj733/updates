@@ -170,3 +170,16 @@ class BusinessSettingsInput(BaseModel):
     currency: Optional[str] = None
     cod_enabled: Optional[bool] = None
     online_payment_enabled: Optional[bool] = None
+
+
+# ---------- Combo Banner ----------
+class ComboBannerInput(BaseModel):
+    package_id: Optional[str] = None
+    title: str
+    subtitle: Optional[str] = ""
+    promo_text: Optional[str] = ""
+    cta_text: str = "View Combo"
+    image_url: str = ""
+    display_order: int = 0
+    is_active: bool = True
+    location_ids: List[str] = []

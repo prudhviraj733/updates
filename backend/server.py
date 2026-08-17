@@ -15,7 +15,7 @@ from seed import run_seed
 from routers import (
     auth, addresses, locations, categories, products, inventory,
     cart, wishlist, delivery, orders, coupons, payments, packages,
-    settings, admin_misc, uploads,
+    settings, admin_misc, uploads, combo_banners,
 )
 
 logging.basicConfig(level=logging.INFO,
@@ -32,7 +32,7 @@ async def root():
 
 for module in (auth, addresses, locations, categories, products, inventory,
                cart, wishlist, delivery, orders, coupons, payments, packages,
-               settings, admin_misc, uploads):
+               settings, admin_misc, uploads, combo_banners):
     app.include_router(module.router, prefix="/api")
 
 
