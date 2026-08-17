@@ -55,3 +55,9 @@ Multi-location; dynamic categories; location-based inventory with safe reservati
 1. Collect Razorpay keys and enable online payments end-to-end.
 2. Add product/category image uploads.
 3. Next-day delivery slot support at checkout.
+
+## Iteration 2 (2026-06) — Added
+- **Image uploads** (Emergent object storage): admin `POST /api/admin/upload` (admin-guarded, 5MB, image-only) → public URL served via `GET /api/files/{path}`; `ImageUpload` component wired into admin Products & Categories with live previews. Verified 44/44 tests.
+- **Next-day slots**: `GET /api/delivery/slots/range?days=N` (IST); checkout now shows date tabs (Today/Tomorrow/…) and can place next-day slot orders. Auto-selects first day with availability.
+- **Order alerts**: Email via managed Resend (server-side templates + safety gate) + SMS via Twilio; `notify_order()` fires on order create ('pending') and every admin status change. Best-effort/non-blocking.
+- **Razorpay**: fully wired (create-order/verify/webhook); activates when `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are set. Twilio SMS activates when `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` are set. Until then, COD + email work; Razorpay returns a graceful 503 and SMS silently skips.

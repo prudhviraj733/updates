@@ -91,6 +91,16 @@ async def slots(location_id: str, date: str):
     return await compute_slots(location_id, date)
 
 
+@router.get("/delivery/slots/range")
+async def slots_range(location_id: str, days: int = 3):
+    now = datetime.now(IST).date()
+    out = []
+    for i in range(max(1, min(days, 7))):
+        d = (now + timedelta(days=i)).strftime("%Y-%m-%d")
+        out.append(await compute_slots(location_id, d))
+    return {"days": out}
+
+
 # ---- Admin ----
 @router.get("/admin/delivery/settings")
 async def admin_get_settings(location_id: str, admin: dict = Depends(require_admin)):

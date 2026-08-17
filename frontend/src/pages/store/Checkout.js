@@ -27,7 +27,8 @@ export default function Checkout() {
   const { location, cart, clearCart, refreshCart } = useStore();
   const [addresses, setAddresses] = useState([]);
   const [addressId, setAddressId] = useState(null);
-  const [slotData, setSlotData] = useState({ slots: [], asap: { enabled: false } });
+  const [slotDays, setSlotDays] = useState([]);
+  const [dayIndex, setDayIndex] = useState(0);
   const [deliveryType, setDeliveryType] = useState("slot");
   const [slotId, setSlotId] = useState(null);
   const [payment, setPayment] = useState("cod");
@@ -50,10 +51,15 @@ export default function Checkout() {
       const def = scoped.find((a) => a.is_default) || scoped[0];
       if (def) setAddressId(def.id);
     });
-    api.get(`/delivery/slots?location_id=${location.id}&date=${today}`).then(({ data }) => {
-      setSlotData(data);
-      const firstAvail = data.slots.find((s) => s.available);
-      if (firstAvail) setSlotId(firstAvail.id);
+    api.get(`/delivery/slots/range?location_id=${location.id}&days=4`).then(({ data }) => {
+      const days = data.days || [];
+      setSlotDays(days);
+      const idx = days.findIndex((d) => d.slots.some((s) => s.available));
+      if (idx >= 0) {
+        setDayIndex(idx);
+        const fa = days[idx].slots.find((s) => s.available);
+        if (fa) setSlotId(fa.id);
+      }
     });
     api.get("/payments/config").then(({ data }) => setPayConfig(data));
     api.get("/settings").then(({ data }) => setSettings(data));
@@ -69,7 +75,9 @@ export default function Checkout() {
     );
   }
 
-  const asapCharge = slotData.asap?.charge || 0;
+  const slotData = slotDays[dayIndex] || { slots: [], asap: {} };
+  const asapInfo = slotDays[0]?.asap || {};
+  const asapCharge = asapInfo.charge || 0;
   const deliveryCharge = location.delivery_charge || 0;
   const couponDiscount = couponResult?.discount || 0;
   const extra = deliveryType === "asap" ? asapCharge : 0;
@@ -203,21 +211,37 @@ export default function Checkout() {
                 <div className="flex items-center gap-2"><Clock className="h-5 w-5 text-forest" /><span className="font-medium">Scheduled Slot</span></div>
                 <p className="mt-1 text-xs text-muted-foreground">Pick a convenient delivery window</p>
               </button>
-              {slotData.asap?.enabled && (
+              {asapInfo.enabled && (
                 <button
                   data-testid="delivery-asap-option"
                   onClick={() => setDeliveryType("asap")}
                   className={`rounded-xl border-2 p-4 text-left transition-colors ${deliveryType === "asap" ? "border-saffron bg-saffron/10" : "border-dashed border-saffron/50 hover:bg-saffron/5"}`}
                 >
                   <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-saffron" /><span className="font-medium text-saffron">As Soon As Possible</span></div>
-                  <p className="mt-1 text-xs text-muted-foreground">Priority delivery{slotData.asap.eta && ` by ~${slotData.asap.eta}`} · +{inr(asapCharge)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Priority delivery{asapInfo.eta && ` by ~${asapInfo.eta}`} · +{inr(asapCharge)}</p>
                 </button>
               )}
             </div>
 
             {deliveryType === "slot" && (
               <div className="mt-5">
-                <p className="mb-2 text-sm font-medium">Available slots for today</p>
+                <div className="mb-3 flex flex-wrap gap-2" data-testid="slot-date-tabs">
+                  {slotDays.map((d, i) => {
+                    const dt = new Date(`${d.date}T00:00:00`);
+                    const lbl = i === 0 ? "Today" : i === 1 ? "Tomorrow" : dt.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+                    const has = d.slots.some((s) => s.available);
+                    return (
+                      <button
+                        key={d.date}
+                        data-testid={`slot-date-${i}`}
+                        onClick={() => { setDayIndex(i); const fa = d.slots.find((s) => s.available); setSlotId(fa ? fa.id : null); }}
+                        className={`rounded-full border px-4 py-2 text-sm transition-colors ${dayIndex === i ? "border-forest bg-forest text-white" : "border-border bg-white hover:border-forest/40"} ${!has ? "opacity-50" : ""}`}
+                      >
+                        {lbl}{!has && <span className="ml-1 text-[10px]">(full)</span>}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {slotData.slots.map((s) => (
                     <button
@@ -235,7 +259,7 @@ export default function Checkout() {
                     </button>
                   ))}
                   {slotData.slots.filter((s) => s.available).length === 0 && (
-                    <p className="col-span-full text-sm text-muted-foreground">No slots available today. Try ASAP delivery if offered.</p>
+                    <p className="col-span-full text-sm text-muted-foreground">No slots available for this day. Pick another date or choose ASAP.</p>
                   )}
                 </div>
               </div>

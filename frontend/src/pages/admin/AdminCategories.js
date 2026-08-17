@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ImageUpload } from "@/components/admin/ImageUpload";
 
 const EMPTY = { name: "", description: "", image_url: "", parent_id: null, display_order: 0, is_active: true };
 
@@ -59,7 +60,11 @@ export default function AdminCategories() {
           <div className="grid gap-3">
             <div><Label>Name</Label><Input data-testid="category-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div><Label>Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-            <div><Label>Image URL</Label><Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></div>
+            <div>
+              <div className="flex items-center justify-between"><Label>Category image</Label><ImageUpload onUploaded={(url) => setForm((f) => ({ ...f, image_url: url }))} /></div>
+              <Input className="mt-1" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="Upload or paste image URL" />
+              {form.image_url && <img src={form.image_url} className="mt-2 h-16 w-16 rounded border object-cover" alt="" />}
+            </div>
             <div><Label>Display order</Label><Input type="number" value={form.display_order} onChange={(e) => setForm({ ...form, display_order: e.target.value })} /></div>
             <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />Active</label>
           </div>

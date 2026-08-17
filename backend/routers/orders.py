@@ -7,6 +7,7 @@ from core.security import get_current_user, require_admin
 from models import OrderInput, OrderStatusUpdate, gen_id, now_iso
 from routers.delivery import get_settings, compute_slots
 from routers.coupons import _calc_discount
+from routers.notifications import notify_order
 
 router = APIRouter()
 
@@ -141,6 +142,10 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
     await db.orders.insert_one(order)
     await db.carts.update_one({"user_id": user["id"], "location_id": payload.location_id}, {"$set": {"items": []}})
     order.pop("_id", None)
+    try:
+        await notify_order(order, "pending")
+    except Exception:
+        pass
     return order
 
 
@@ -199,4 +204,9 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, admin: 
     await db.orders.update_one(
         {"id": order_id},
         {"$set": update, "$push": {"status_history": {"status": payload.status, "at": now_iso()}}})
-    return await db.orders.find_one({"id": order_id}, {"_id": 0})
+    updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    try:
+        await notify_order(updated, payload.status)
+    except Exception:
+        pass
+    return updated

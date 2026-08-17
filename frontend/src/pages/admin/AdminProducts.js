@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ImageUpload } from "@/components/admin/ImageUpload";
 
 const EMPTY = {
   name: "", description: "", category_id: "", images: [], pack_size: "", unit: "",
@@ -94,7 +95,11 @@ export default function AdminProducts() {
               <div><Label>MRP</Label><Input type="number" data-testid="product-mrp" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} /></div>
               <div><Label>Selling price</Label><Input type="number" data-testid="product-price" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} /></div>
             </div>
-            <div><Label>Image URLs (comma separated)</Label><Textarea value={imageStr} onChange={(e) => setImageStr(e.target.value)} placeholder="https://…" /></div>
+            <div>
+              <div className="flex items-center justify-between"><Label>Product images</Label><ImageUpload onUploaded={(url) => setImageStr((s) => (s ? `${s}, ${url}` : url))} /></div>
+              <Textarea className="mt-1" value={imageStr} onChange={(e) => setImageStr(e.target.value)} placeholder="Upload or paste image URLs (comma separated)" />
+              {imageStr && <div className="mt-2 flex flex-wrap gap-2">{imageStr.split(",").map((s) => s.trim()).filter(Boolean).map((u, i) => <img key={i} src={u} className="h-12 w-12 rounded border object-cover" alt="" />)}</div>}
+            </div>
             <div><Label>Available at locations</Label>
               <div className="mt-1 flex flex-wrap gap-2">{locations.map((l) => <button key={l.id} onClick={() => toggleLoc(l.id)} className={`rounded-full border px-3 py-1 text-xs ${form.location_ids.includes(l.id) ? "border-forest bg-forest text-white" : "border-slate-300"}`}>{l.name}</button>)}</div>
             </div>

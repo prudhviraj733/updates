@@ -15,7 +15,7 @@ from seed import run_seed
 from routers import (
     auth, addresses, locations, categories, products, inventory,
     cart, wishlist, delivery, orders, coupons, payments, packages,
-    settings, admin_misc,
+    settings, admin_misc, uploads,
 )
 
 logging.basicConfig(level=logging.INFO,
@@ -32,7 +32,7 @@ async def root():
 
 for module in (auth, addresses, locations, categories, products, inventory,
                cart, wishlist, delivery, orders, coupons, payments, packages,
-               settings, admin_misc):
+               settings, admin_misc, uploads):
     app.include_router(module.router, prefix="/api")
 
 
@@ -52,6 +52,12 @@ async def on_startup():
     await db.categories.create_index("display_order")
     await db.coupons.create_index("code", unique=True)
     await run_seed()
+    try:
+        from routers.uploads import init_storage
+        init_storage()
+        logger.info("Object storage initialized")
+    except Exception as e:
+        logger.error(f"Storage init failed (uploads will retry on demand): {e}")
     logger.info("Startup complete: indexes ensured and data seeded.")
 
 
