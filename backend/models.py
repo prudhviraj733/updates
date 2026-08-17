@@ -1,4 +1,5 @@
 import uuid
+
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
@@ -11,6 +12,43 @@ def now_iso() -> str:
 
 def gen_id() -> str:
     return str(uuid.uuid4())
+
+
+class PersonalizationSettingsInput(BaseModel):
+    active_days: int = 30
+    inactive_days: int = 45
+    comeback_days: int = 30
+    high_value_spend: float = 5000
+    repeat_orders: int = 3
+    frequent_orders: int = 5
+    category_affinity_count: int = 2
+
+
+class CampaignInput(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    offer_type: str = "fixed"
+    discount_type: str = "fixed"
+    discount_value: float = 0
+    max_discount: Optional[float] = None
+    min_order_value: float = 0
+    free_delivery: bool = False
+    product_id: Optional[str] = None
+    category_id: Optional[str] = None
+    package_id: Optional[str] = None
+    target_type: str = "all"
+    customer_ids: List[str] = []
+    segment: Optional[str] = None
+    location_ids: List[str] = []
+    conditions: dict = {}
+    priority: int = 0
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    usage_limit_per_customer: int = 1
+    shareable: bool = False
+    is_active: bool = True
+
+
 
 
 # ---------- Auth ----------
@@ -183,3 +221,5 @@ class ComboBannerInput(BaseModel):
     display_order: int = 0
     is_active: bool = True
     location_ids: List[str] = []
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None

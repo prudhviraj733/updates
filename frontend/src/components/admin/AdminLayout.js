@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Package, Tags, Boxes, MapPin, ShoppingBag, Users,
-  Truck, Clock, Ticket, CreditCard, Settings, LogOut, Store, Gift, Images,
+  Truck, Clock, Ticket, CreditCard, Settings, LogOut, Store, Gift, Images, Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -14,6 +14,7 @@ const NAV = [
   { to: "/admin/locations", icon: MapPin, label: "Locations" },
   { to: "/admin/delivery", icon: Truck, label: "Delivery & Slots" },
   { to: "/admin/coupons", icon: Ticket, label: "Coupons" },
+  { to: "/admin/campaigns", icon: Sparkles, label: "Personalized Offers" },
   { to: "/admin/packages", icon: Gift, label: "Packages" },
   { to: "/admin/combo-banners", icon: Images, label: "Combo Banners" },
   { to: "/admin/customers", icon: Users, label: "Customers" },

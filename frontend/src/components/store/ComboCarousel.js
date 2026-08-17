@@ -54,6 +54,11 @@ export function ComboCarousel({ banners }) {
                   className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-transparent" />
+                {b.package?.savings > 0 && (
+                  <div className="absolute right-[-42px] top-5 z-10 rotate-45 bg-saffron px-12 py-1 text-center text-[11px] font-extrabold uppercase tracking-wide text-white shadow-lg" data-testid={`combo-ribbon-${b.id}`}>
+                    Save {inr(b.package.savings)}
+                  </div>
+                )}
                 <div className="relative flex h-full max-w-xl flex-col justify-center gap-1.5 p-5 sm:gap-2 sm:p-10">
                   {b.promo_text && (
                     <span className="w-fit rounded-full bg-saffron px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white sm:text-xs">

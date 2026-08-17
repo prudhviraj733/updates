@@ -96,14 +96,30 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         slot_id = payload.slot_id
         slot_label = match["label"]
 
-    # Coupon
+    # Coupon (public or personalized)
     coupon_discount = 0.0
     coupon_code = None
+    campaign_id = None
+    free_delivery_applied = False
     if payload.coupon_code:
         coupon = await db.coupons.find_one({"code": payload.coupon_code.upper(), "is_active": True}, {"_id": 0})
         if coupon and subtotal >= coupon.get("min_order_value", 0):
             coupon_discount = _calc_discount(coupon, subtotal)
             coupon_code = coupon["code"]
+        else:
+            from routers.personalization import resolve_personalized
+            try:
+                pc = await resolve_personalized(payload.coupon_code, user["id"], payload.location_id, subtotal)
+            except HTTPException:
+                pc = None
+            if pc:
+                coupon_discount = pc["discount"]
+                coupon_code = pc["code"]
+                campaign_id = pc.get("campaign_id")
+                free_delivery_applied = pc.get("free_delivery", False)
+
+    if free_delivery_applied:
+        delivery_charge = 0
 
     final_amount = round(subtotal - coupon_discount + delivery_charge + asap_charge, 2)
 
@@ -125,6 +141,8 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "product_discount": round(total_mrp - subtotal, 2),
         "coupon_code": coupon_code,
         "coupon_discount": coupon_discount,
+        "campaign_id": campaign_id,
+        "free_delivery_applied": free_delivery_applied,
         "delivery_charge": delivery_charge,
         "asap_charge": asap_charge,
         "final_amount": final_amount,
@@ -140,6 +158,10 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "updated_at": now_iso(),
     }
     await db.orders.insert_one(order)
+    if campaign_id and coupon_code:
+        await db.personalized_coupons.update_one(
+            {"code": coupon_code, "user_id": user["id"]},
+            {"$inc": {"used_count": 1}, "$set": {"redeemed_at": now_iso()}})
     await db.carts.update_one({"user_id": user["id"], "location_id": payload.location_id}, {"$set": {"items": []}})
     order.pop("_id", None)
     try:

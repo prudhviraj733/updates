@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
 
 from core.db import db
 from core.security import require_admin
@@ -7,6 +8,17 @@ from models import ComboBannerInput, gen_id, now_iso
 router = APIRouter()
 
 MAX_BANNERS = 5
+
+
+def _within_schedule(b: dict) -> bool:
+    now = datetime.now().isoformat()
+    sd = b.get("start_date")
+    ed = b.get("end_date")
+    if sd and sd > now:
+        return False
+    if ed and (ed + "T23:59:59") < now:
+        return False
+    return True
 
 
 async def _enrich(banner: dict) -> dict:
@@ -31,6 +43,7 @@ async def _enrich(banner: dict) -> dict:
 @router.get("/combo-banners")
 async def list_banners(location_id: str = None):
     banners = await db.combo_banners.find({"is_active": True}, {"_id": 0}).to_list(200)
+    banners = [b for b in banners if _within_schedule(b)]
     if location_id:
         banners = [b for b in banners if not b.get("location_ids") or location_id in b["location_ids"]]
     banners.sort(key=lambda b: b.get("display_order", 0))
@@ -52,6 +65,14 @@ async def create_banner(payload: ComboBannerInput, admin: dict = Depends(require
     await db.combo_banners.insert_one(doc)
     doc.pop("_id", None)
     return await _enrich(doc)
+
+
+@router.put("/admin/combo-banners/reorder")
+async def reorder_banners(body: dict, admin: dict = Depends(require_admin)):
+    ids = body.get("ordered_ids", [])
+    for i, bid in enumerate(ids):
+        await db.combo_banners.update_one({"id": bid}, {"$set": {"display_order": i, "updated_at": now_iso()}})
+    return {"message": "Reordered", "count": len(ids)}
 
 
 @router.put("/admin/combo-banners/{banner_id}")

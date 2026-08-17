@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Search, ShoppingCart, MapPin, User, ChevronDown, Menu, Heart, Package } from "lucide-react";
+import { Search, ShoppingCart, MapPin, User, ChevronDown, Menu, Heart, Package, Ticket } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,9 @@ export function Header() {
         </form>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <Button variant="ghost" className="hidden rounded-full text-sm font-medium sm:flex" onClick={() => navigate("/offers")} data-testid="offers-nav">
+            <Ticket className="mr-1 h-4 w-4 text-saffron" /> Offers
+          </Button>
           <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate("/wishlist")} data-testid="wishlist-nav">
             <Heart className="h-5 w-5" />
           </Button>
@@ -75,6 +78,7 @@ export function Header() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate("/account")} data-testid="menu-account"><User className="mr-2 h-4 w-4" />My Account</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/orders")} data-testid="menu-orders"><Package className="mr-2 h-4 w-4" />My Orders</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/my-coupons")} data-testid="menu-coupons"><Ticket className="mr-2 h-4 w-4" />My Coupons</DropdownMenuItem>
                   {user.role === "admin" && (
                     <DropdownMenuItem onClick={() => navigate("/admin")} data-testid="menu-admin">Admin Dashboard</DropdownMenuItem>
                   )}

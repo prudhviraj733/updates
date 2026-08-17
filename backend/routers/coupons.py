@@ -37,6 +37,23 @@ async def validate_coupon(payload: CouponValidateInput):
     return {"code": coupon["code"], "discount": discount, "message": "Coupon applied"}
 
 
+@router.get("/coupons")
+async def list_public_coupons(location_id: str = None):
+    now = datetime.now().isoformat()
+    coupons = await db.coupons.find({"is_active": True}, {"_id": 0}).to_list(200)
+    out = []
+    for c in coupons:
+        if c.get("start_date") and c["start_date"] > now:
+            continue
+        if c.get("end_date") and (c["end_date"] + "T23:59:59") < now:
+            continue
+        if location_id and c.get("location_ids") and location_id not in c["location_ids"]:
+            continue
+        out.append({k: c.get(k) for k in
+                    ["code", "discount_type", "discount_value", "min_order_value", "max_discount", "end_date"]})
+    return out
+
+
 # ---- Admin ----
 @router.get("/admin/coupons")
 async def list_coupons(admin: dict = Depends(require_admin)):

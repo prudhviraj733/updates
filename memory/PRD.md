@@ -56,6 +56,16 @@ Multi-location; dynamic categories; location-based inventory with safe reservati
 2. Add product/category image uploads.
 3. Next-day delivery slot support at checkout.
 
+## Iteration 5 (2026-06) — Personalized Offers & Customer Segmentation
+- New collections: `campaigns`, `personalized_coupons`, `personalization_settings`. Order docs gained `campaign_id`, `free_delivery_applied`.
+- Backend `personalization.py`: per-customer metrics (order count, spend, AOV, recency, product/category affinity, combo count) → 9 configurable segments (new/active/repeat/high_value/inactive/at_risk/monthly_combo/dry_fruit/frequent_grocery). Server-side eligibility engine with target types (all/segment/individual/multiple/location) + conditions (not_ordered_days, min_aov, min_total_spend, min_orders, purchased_product/category/combo).
+- Admin: segment counts, configurable thresholds, campaign CRUD, eligible preview, issue unique per-customer coupons (linked to customer/campaign/offer/location/expiry/usage/shareable), analytics (targeted/eligible/issued/redeemed/orders/revenue/discount/AOV/conversion/free-delivery), Customer-360 offers endpoint.
+- Customer: `GET /me/offers`, `/me/buy-again` (in-location, in-stock, ranked by frequency+recency), `/me/personalized-home`. Personalized coupons validated & redeemed server-side in checkout; owner-only unless shareable; free-delivery zeroes delivery charge.
+- Frontend: home "Offers for you" + "Buy Again" (hidden when no history), "My Coupons" page + header/account link, admin "Personalized Offers" page (segments bar, campaign create, issue, analytics modal).
+- Verified via curl: segments (8 customers), campaign→8 eligible→8 issued, analytics, customer sees their ₹150 coupon. Frontend compiles clean. Existing flows untouched.
+
+## Iteration 4 (2026-06) — Banner scheduling, drag-reorder, savings ribbon, Offers page (all verified 17/17).
+
 ## Iteration 3 (2026-06) — Monthly Combo Hero Carousel
 - Backend `combo_banners` collection + `GET /api/combo-banners?location_id` (active only, location-filtered: empty location_ids = all locations, else membership; sorted by display_order; capped at 5; enriched with package price/savings/item_count). Admin CRUD `/api/admin/combo-banners` (role-guarded). `GET /api/packages/{id}` combo detail with products + items_value + savings.
 - `ComboBannerInput` model; seed of 3 monthly combos + 3 all-location banners (prices tuned so savings show).

@@ -6,6 +6,7 @@ import api from "@/lib/api";
 import { useStore } from "@/context/StoreContext";
 import { ProductCard } from "@/components/store/ProductCard";
 import { ComboCarousel } from "@/components/store/ComboCarousel";
+import { PersonalizedSection } from "@/components/store/PersonalizedSection";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -92,6 +93,8 @@ export default function Home() {
       </section>
 
       <ComboCarousel banners={banners} />
+
+      <PersonalizedSection />
 
       {/* Categories */}
       <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
