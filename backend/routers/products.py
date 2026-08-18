@@ -34,6 +34,10 @@ async def list_products(
     location_id: Optional[str] = None,
     search: Optional[str] = None,
     featured: Optional[bool] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    min_discount: Optional[int] = None,
+    in_stock: Optional[bool] = None,
 ):
     query = {"is_active": True}
     if category_id:
@@ -46,10 +50,32 @@ async def list_products(
         query["location_ids"] = location_id
     if featured is not None:
         query["is_featured"] = featured
+    if min_price is not None or max_price is not None:
+        price_q = {}
+        if min_price is not None:
+            price_q["$gte"] = min_price
+        if max_price is not None:
+            price_q["$lte"] = max_price
+        query["selling_price"] = price_q
     if search:
-        query["name"] = {"$regex": search, "$options": "i"}
+        # Search across product name, sku, description AND brand name
+        brand_ids = [b["id"] for b in await db.brands.find(
+            {"name": {"$regex": search, "$options": "i"}}, {"id": 1, "_id": 0}).to_list(200)]
+        ors = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"sku": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+        ]
+        if brand_ids:
+            ors.append({"brand_id": {"$in": brand_ids}})
+        query["$or"] = ors
     docs = await db.products.find(query, {"_id": 0}).to_list(1000)
-    return [await enrich(d, location_id) for d in docs]
+    result = [await enrich(d, location_id) for d in docs]
+    if min_discount:
+        result = [p for p in result if p.get("discount_percent", 0) >= min_discount]
+    if in_stock:
+        result = [p for p in result if p.get("in_stock")]
+    return result
 
 
 @router.get("/products/{product_id}")

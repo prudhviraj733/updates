@@ -7,11 +7,24 @@ from models import CategoryInput, gen_id, now_iso
 router = APIRouter()
 
 
+def _dedupe_by_name(docs):
+    """Collapse duplicate categories/subcategories by (name, parent_id), keeping the first."""
+    seen = {}
+    out = []
+    for d in docs:
+        key = (d.get("name", "").strip().lower(), d.get("parent_id"))
+        if key in seen:
+            continue
+        seen[key] = True
+        out.append(d)
+    return out
+
+
 @router.get("/categories")
 async def list_categories():
     docs = await db.categories.find({"is_active": True, "parent_id": None}, {"_id": 0}).to_list(500)
     docs.sort(key=lambda d: d.get("display_order", 0))
-    return docs
+    return _dedupe_by_name(docs)
 
 
 @router.get("/subcategories")
@@ -21,7 +34,7 @@ async def list_subcategories(category_id: str = None):
         query["parent_id"] = category_id
     docs = await db.categories.find(query, {"_id": 0}).to_list(1000)
     docs.sort(key=lambda d: d.get("display_order", 0))
-    return docs
+    return _dedupe_by_name(docs)
 
 
 @router.get("/admin/subcategories")

@@ -166,3 +166,11 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - Combos add items at individual prices in cart (curated-list model), so combo bundle price isn't enforced as a single cart line — consider a true bundle cart item if strict combo pricing is required.
 - Prior P2s: atomic wallet balance, milestone dedup by order_id, mobile app port (still scaffold).
 
+
+## Iteration 9 (2026-06) — Search Results filters + duplicate-category fix (testing_agent VERIFIED 14/14 backend + all frontend flows, iteration_7)
+- **Category dedupe**: `_dedupe_by_name` in categories.py collapses duplicate category/subcategory records on READ (by name+parent_id) — fixes "Home needs" showing twice; DB records untouched (no deletes). `/categories` now returns 10 unique names.
+- **Brand-aware search**: products.py `/products` search now matches product name, sku, description AND brand name (`$or` with brand_ids lookup). Existing name search + category filter preserved.
+- **New filter params**: `min_price`, `max_price` (Mongo query), `min_discount`, `in_stock` (post-enrich). subcategory_id/brand_id/category_id all combinable.
+- **Search page rewrite** (Products.js): proper filter experience — Category (single, URL param), Subcategory + Brand (multi, checkboxes), Price slider, Discount chips (10/25/50), In-stock toggle, Clear all + active-filter chips + results count. Desktop left sidebar; mobile Filter button → Sheet drawer. Subcategory/brand facets are RELEVANT (derived from current result set only). ProductCard/pricing/discount/wishlist preserved.
+- Backlog (P2): persist discount_percent server-side or compute Mongo-side for large catalogs; add unique compound index (name-lower, parent_id) to block future duplicate category inserts (write-side).
+
