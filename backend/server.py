@@ -16,6 +16,7 @@ from routers import (
     auth, addresses, locations, categories, products, inventory,
     cart, wishlist, delivery, orders, coupons, payments, packages,
     settings, admin_misc, uploads, combo_banners, personalization,
+    brands, pincodes, analytics, wallet, referral, customers,
 )
 
 logging.basicConfig(level=logging.INFO,
@@ -32,7 +33,8 @@ async def root():
 
 for module in (auth, addresses, locations, categories, products, inventory,
                cart, wishlist, delivery, orders, coupons, payments, packages,
-               settings, admin_misc, uploads, combo_banners, personalization):
+               settings, admin_misc, uploads, combo_banners, personalization,
+               brands, pincodes, analytics, wallet, referral, customers):
     app.include_router(module.router, prefix="/api")
 
 
@@ -51,6 +53,13 @@ async def on_startup():
     await db.carts.create_index([("user_id", 1), ("location_id", 1)], unique=True)
     await db.categories.create_index("display_order")
     await db.coupons.create_index("code", unique=True)
+    await db.brands.create_index("name")
+    await db.pincodes.create_index("pincode", unique=True)
+    await db.pincodes.create_index("location_id")
+    await db.categories.create_index("parent_id")
+    await db.wallet_ledger.create_index("user_id")
+    await db.referrals.create_index("referrer_id")
+    await db.users.create_index("referral_code")
     await run_seed()
     try:
         from routers.uploads import init_storage

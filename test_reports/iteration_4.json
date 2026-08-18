@@ -1,0 +1,31 @@
+{
+  "summary": "MASTER PRODUCTION UPDATE testing (backend + admin frontend). Backend: created /app/backend/tests/test_master_update.py with 36 pytest cases spanning catalog hierarchy (parent-only /categories, /subcategories?category_id=, /brands, admin subcategories/brands, product create with category_id+subcategory_id+brand_id+cost_price), PIN codes (public /pincodes/check for 500034 serviceable + unknown=false; admin CRUD + duplicate 400), Coupons (product vs delivery validation, stacking rules — two product coupons rejected, product+delivery allowed, delivery discount = delivery_charge+asap_charge when scope=both, bulk create-5 unique codes), Orders lifecycle (stacked-coupon COD order — final = subtotal - coupon_discount + delivery + asap - delivery_discount; status=pending, accepted=false, customer_status set; /admin/orders/pending-count returns id; accept + tracking + status transitions to delivered work; cancel path exercised), Analytics (overview keys net_revenue/cogs/gross_profit/gross_margin_pct/estimated_profit/delivery_revenue/asap_revenue/coupon_discount/total_expenses; products/carts/coupons/payments/pin-stats all shaped; expenses CRUD affects overview.total_expenses when location filter applied), Wallet + Referral (admin adjust credits and updates balance; self-referral rejected 400; referral code auto-created), Customer 360 (all 9 sections returned with summary fields), Regression (auth admin+customer, products, /delivery/slots/range, /me/offers, /combo-banners, WELCOME50 validate). Result: 36/36 PASSED. Admin frontend: logged in, confirmed exactly 8 nav groups (Dashboard, Orders, Catalog & Inventory, Sales & Analytics, Coupons & Discounts, Customer Info, Delivery Info & Stats, Personal Settings) — none missing. /admin/analytics renders admin-analytics testid + Profitability/Carts/Coupons/Expenses tabs + Add Expense button + KPI cards (Net Revenue, Gross Profit, Est. Profit, AOV, COGS, Discounts, Delivery, Refunds). /admin/brands, /admin/subcategories, /admin/pincodes each load with Add button. /admin/coupons shows 7 coupons incl. FREEDEL + TESTDEL delivery types + Bulk Generate button. /admin/orders shows red '7 new orders — accept now' alert and multiple Accept buttons. /admin/orders/{id} loads with admin-order-detail testid, tracking Provider+URL+Save, status dropdown, customer_status label ('Customer sees: …'). /admin/customers/{id} loads with admin-customer-detail testid, KPI cards (Orders, Total Spend, AOV, Cancelled, Wallet, Referrals), tabs (Orders/Behaviour/Coupons/Wallet/Referrals/Abandoned), Adjust/Refund Wallet button. No JS page errors thrown.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_master_update.py",
+    "/app/test_reports/pytest/master_update.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/analytics.py analytics_carts and customers.py customer_360 issue N+1 queries — one products.find_one per cart item / abandoned cart / order item. Should batch with $in.",
+    "routers/orders.py create_order fetches each product one-by-one from the cart in a loop; also N+1. Batch with $in.",
+    "routers/coupons.py validate re-fetches each already-applied coupon inside the loop; could be a single $in on codes.",
+    "routers/coupons.py bulk_create_coupons inserts one at a time in a loop (up to 5000). Prefer bulk_write / insert_many for scale.",
+    "routers/wallet.py add_wallet_entry computes balance_after by fully re-summing the ledger for every insert — O(n) per write and race-condition prone under concurrency. Cache balance on user or use atomic $inc on a wallet doc.",
+    "routers/orders.py cancel-refund path is not idempotent-safe against concurrent cancel calls (ledger duplicate guard uses find, not a unique index). Add a unique index on (order_id, reason='refund').",
+    "routers/orders.py _reserve_inventory rollback on failure could itself fail silently; wrap in try/except and surface partial-rollback.",
+    "routers/customers.py favourite_products keys by product name (not id) — two products with same name would collide.",
+    "routers/analytics.py RAZORPAY_FEE_PCT hardcoded; move to settings.",
+    "routers/pincodes.py update_pincode does not re-check location_id validity (only create does).",
+    "personalization.py at 379 lines is nearing the 700-line limit; not urgent."
+  ],
+  "updated_files": ["/app/backend/tests/test_master_update.py"],
+  "success_rate": {"backend": "100% (36/36)", "frontend": "100% (all admin flows load + all data-testids present)"},
+  "test_credentials": "Admin prudhvirajm847@gmail.com/Admin@12345, Customer customer@test.com/Test@12345 — both verified.",
+  "seed_data_creation": "TESTDEL delivery coupon (100% both scope), a temp PIN code created & deleted, one temp expense created & deleted, one TEST_MU_Product created & deleted, several stacked-coupon test orders (FG260800012/013/014) left in DB for regression visibility.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full test file: /app/backend/tests/test_master_update.py (36 tests, all pass). Run with `pytest backend/tests/test_master_update.py -n 0`. FREEDEL and TESTDEL delivery coupons exist. Seed pincode 500034 IS serviceable (mapped to Hyderabad-Central). Frontend admin routes verified: /admin/{analytics,brands,subcategories,pincodes,coupons,orders,orders/{id},customers,customers/{id},delivery-stats} all load without errors. All required data-testids present.",
+  "rca of the issue": "No issues found."
+}

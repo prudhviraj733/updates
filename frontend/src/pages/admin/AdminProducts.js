@@ -12,13 +12,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ImageUpload } from "@/components/admin/ImageUpload";
 
 const EMPTY = {
-  name: "", description: "", category_id: "", images: [], pack_size: "", unit: "",
-  mrp: 0, selling_price: 0, sku: "", is_active: true, is_featured: false, location_ids: [],
+  name: "", description: "", category_id: "", subcategory_id: null, brand_id: null, images: [], pack_size: "", unit: "",
+  mrp: 0, selling_price: 0, cost_price: 0, sku: "", is_active: true, is_featured: false, location_ids: [],
 };
 
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [locations, setLocations] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -28,17 +30,20 @@ export default function AdminProducts() {
   const load = () => api.get("/admin/products").then(({ data }) => setProducts(data));
   useEffect(() => {
     load();
-    api.get("/categories").then(({ data }) => setCategories(data));
+    api.get("/admin/categories").then(({ data }) => setCategories(data));
+    api.get("/admin/subcategories").then(({ data }) => setSubcategories(data));
+    api.get("/admin/brands").then(({ data }) => setBrands(data));
     api.get("/admin/locations").then(({ data }) => setLocations(data));
   }, []);
 
   const openNew = () => { setEditing(null); setForm({ ...EMPTY, category_id: categories[0]?.id || "", location_ids: locations.map((l) => l.id) }); setImageStr(""); setOpen(true); };
-  const openEdit = (p) => { setEditing(p); setForm({ ...p }); setImageStr((p.images || []).join(", ")); setOpen(true); };
+  const openEdit = (p) => { setEditing(p); setForm({ ...p, subcategory_id: p.subcategory_id || null, brand_id: p.brand_id || null }); setImageStr((p.images || []).join(", ")); setOpen(true); };
 
   const save = async () => {
+    if (!form.subcategory_id) { toast.error("Please select a subcategory"); return; }
     const payload = {
       ...form,
-      mrp: Number(form.mrp), selling_price: Number(form.selling_price),
+      mrp: Number(form.mrp), selling_price: Number(form.selling_price), cost_price: Number(form.cost_price) || 0,
       images: imageStr.split(",").map((s) => s.trim()).filter(Boolean),
     };
     try {
@@ -51,6 +56,7 @@ export default function AdminProducts() {
   const del = async (id) => { await api.delete(`/admin/products/${id}`); toast.success("Deactivated"); load(); };
   const toggleLoc = (id) => setForm((f) => ({ ...f, location_ids: f.location_ids.includes(id) ? f.location_ids.filter((x) => x !== id) : [...f.location_ids, id] }));
   const catName = (id) => categories.find((c) => c.id === id)?.name || "-";
+  const subsForCat = subcategories.filter((s) => s.parent_id === form.category_id);
 
   return (
     <div>
@@ -84,16 +90,21 @@ export default function AdminProducts() {
             <div><Label>Name</Label><Input data-testid="product-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div><Label>Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Category</Label><select className="w-full rounded-md border p-2" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div><Label>Category</Label><select className="w-full rounded-md border p-2" data-testid="product-category" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value, subcategory_id: null })}>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div><Label>Subcategory</Label><select className="w-full rounded-md border p-2" data-testid="product-subcategory" value={form.subcategory_id || ""} onChange={(e) => setForm({ ...form, subcategory_id: e.target.value || null })}><option value="">Select…</option>{subsForCat.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Brand</Label><select className="w-full rounded-md border p-2" data-testid="product-brand" value={form.brand_id || ""} onChange={(e) => setForm({ ...form, brand_id: e.target.value || null })}><option value="">No brand</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
               <div><Label>SKU</Label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Pack size</Label><Input value={form.pack_size} onChange={(e) => setForm({ ...form, pack_size: e.target.value })} /></div>
               <div><Label>Unit</Label><Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div><Label>MRP</Label><Input type="number" data-testid="product-mrp" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} /></div>
               <div><Label>Selling price</Label><Input type="number" data-testid="product-price" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} /></div>
+              <div><Label>Cost price</Label><Input type="number" data-testid="product-cost" value={form.cost_price} onChange={(e) => setForm({ ...form, cost_price: e.target.value })} /></div>
             </div>
             <div>
               <div className="flex items-center justify-between"><Label>Product images</Label><ImageUpload onUploaded={(url) => setImageStr((s) => (s ? `${s}, ${url}` : url))} /></div>

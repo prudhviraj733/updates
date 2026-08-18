@@ -35,7 +35,8 @@ export default function Checkout() {
   const [payConfig, setPayConfig] = useState({ razorpay_enabled: false });
   const [settings, setSettings] = useState({ cod_enabled: true, online_payment_enabled: true });
   const [coupon, setCoupon] = useState("");
-  const [couponResult, setCouponResult] = useState(null);
+  const [productCoupon, setProductCoupon] = useState(null);
+  const [deliveryCoupon, setDeliveryCoupon] = useState(null);
   const [addrOpen, setAddrOpen] = useState(false);
   const [newAddr, setNewAddr] = useState(EMPTY_ADDR);
   const [placing, setPlacing] = useState(false);
@@ -79,21 +80,28 @@ export default function Checkout() {
   const asapInfo = slotDays[0]?.asap || {};
   const asapCharge = asapInfo.charge || 0;
   const deliveryCharge = location.delivery_charge || 0;
-  const couponDiscount = couponResult?.discount || 0;
+  const productDiscount = productCoupon?.discount || 0;
+  const deliveryDiscount = deliveryCoupon?.discount || 0;
   const extra = deliveryType === "asap" ? asapCharge : 0;
-  const total = Math.max(0, cart.subtotal - couponDiscount + deliveryCharge + extra);
+  const total = Math.max(0, cart.subtotal - productDiscount + deliveryCharge + extra - deliveryDiscount);
 
   const applyCoupon = async () => {
     if (!coupon.trim()) return;
+    const appliedCodes = [productCoupon?.code, deliveryCoupon?.code].filter(Boolean);
     try {
-      const { data } = await api.post("/coupons/validate", { code: coupon, location_id: location.id, subtotal: cart.subtotal });
-      setCouponResult(data);
+      const { data } = await api.post("/coupons/validate", {
+        code: coupon, location_id: location.id, subtotal: cart.subtotal,
+        delivery_charge: deliveryCharge, asap_charge: extra, applied_codes: appliedCodes,
+      });
+      if (data.coupon_type === "delivery") { setDeliveryCoupon(data); }
+      else { setProductCoupon(data); }
+      setCoupon("");
       toast.success(`Coupon applied: -${inr(data.discount)}`);
     } catch (e) {
-      setCouponResult(null);
       toast.error(e.response?.data?.detail || "Invalid coupon");
     }
   };
+  const removeCoupon = (type) => { if (type === "delivery") setDeliveryCoupon(null); else setProductCoupon(null); };
 
   const saveAddress = async () => {
     try {
@@ -119,7 +127,8 @@ export default function Checkout() {
         delivery_type: deliveryType,
         slot_id: deliveryType === "slot" ? slotId : null,
         payment_method: payment,
-        coupon_code: couponResult?.code || null,
+        coupon_code: productCoupon?.code || null,
+        delivery_coupon_code: deliveryCoupon?.code || null,
       });
 
       if (payment === "razorpay") {
@@ -308,12 +317,28 @@ export default function Checkout() {
               <Input data-testid="coupon-input" placeholder="Coupon code" value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} className="rounded-full" />
               <Button variant="outline" className="rounded-full" onClick={applyCoupon} data-testid="apply-coupon">Apply</Button>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">You can stack 1 product coupon + 1 delivery coupon.</p>
+            <div className="mt-2 space-y-1">
+              {productCoupon && (
+                <div className="flex items-center justify-between rounded-lg bg-forest-light px-3 py-1.5 text-sm" data-testid="applied-product-coupon">
+                  <span className="font-mono text-forest">{productCoupon.code}</span>
+                  <span className="flex items-center gap-2 text-forest">-{inr(productCoupon.discount)}<button onClick={() => removeCoupon("product")} className="text-xs underline">remove</button></span>
+                </div>
+              )}
+              {deliveryCoupon && (
+                <div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-1.5 text-sm" data-testid="applied-delivery-coupon">
+                  <span className="font-mono text-blue-700">{deliveryCoupon.code} (delivery)</span>
+                  <span className="flex items-center gap-2 text-blue-700">-{inr(deliveryCoupon.discount)}<button onClick={() => removeCoupon("delivery")} className="text-xs underline">remove</button></span>
+                </div>
+              )}
+            </div>
 
             <div className="mt-4 space-y-1 border-t pt-4 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{inr(cart.subtotal)}</span></div>
-              {couponDiscount > 0 && <div className="flex justify-between text-forest"><span>Coupon</span><span>-{inr(couponDiscount)}</span></div>}
+              {productDiscount > 0 && <div className="flex justify-between text-forest"><span>Coupon</span><span>-{inr(productDiscount)}</span></div>}
               <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{inr(deliveryCharge)}</span></div>
               {deliveryType === "asap" && <div className="flex justify-between text-saffron"><span>Priority (ASAP)</span><span>+{inr(asapCharge)}</span></div>}
+              {deliveryDiscount > 0 && <div className="flex justify-between text-blue-700"><span>Delivery coupon</span><span>-{inr(deliveryDiscount)}</span></div>}
               <div className="flex justify-between pt-2 text-lg font-bold"><span>Total</span><span data-testid="order-total">{inr(total)}</span></div>
             </div>
 

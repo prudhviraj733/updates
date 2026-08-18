@@ -1,10 +1,12 @@
 from datetime import datetime
+import random
+import string
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
 from core.security import require_admin
-from models import CouponInput, CouponValidateInput, gen_id, now_iso
+from models import CouponInput, CouponValidateInput, BulkCouponInput, gen_id, now_iso
 
 router = APIRouter()
 
@@ -19,9 +21,30 @@ def _calc_discount(coupon: dict, subtotal: float) -> float:
     return round(min(disc, subtotal), 2)
 
 
+def _calc_delivery_discount(coupon: dict, delivery_charge: float, asap_charge: float) -> float:
+    """Delivery coupons discount normal delivery, asap, or both based on delivery_scope."""
+    scope = coupon.get("delivery_scope", "both")
+    base = 0.0
+    if scope in ("normal", "both"):
+        base += delivery_charge
+    if scope in ("asap", "both"):
+        base += asap_charge
+    if coupon["discount_type"] == "percentage":
+        disc = base * coupon["discount_value"] / 100
+    else:
+        disc = coupon["discount_value"]
+    if coupon.get("max_discount"):
+        disc = min(disc, coupon["max_discount"])
+    return round(min(disc, base), 2)
+
+
+async def _find_coupon(code: str):
+    return await db.coupons.find_one({"code": code.upper(), "is_active": True}, {"_id": 0})
+
+
 @router.post("/coupons/validate")
 async def validate_coupon(payload: CouponValidateInput):
-    coupon = await db.coupons.find_one({"code": payload.code.upper(), "is_active": True}, {"_id": 0})
+    coupon = await _find_coupon(payload.code)
     if not coupon:
         raise HTTPException(status_code=404, detail="Invalid coupon code")
     now = datetime.now().isoformat()
@@ -31,10 +54,34 @@ async def validate_coupon(payload: CouponValidateInput):
         raise HTTPException(status_code=400, detail="Coupon expired")
     if coupon.get("location_ids") and payload.location_id not in coupon["location_ids"]:
         raise HTTPException(status_code=400, detail="Coupon not valid for this location")
+
+    ctype = coupon.get("coupon_type", "product")
+
+    # ---- Stacking rule: max 1 product coupon + 1 delivery coupon ----
+    applied_types = []
+    for ac in payload.applied_codes:
+        if ac.upper() == payload.code.upper():
+            continue
+        other = await _find_coupon(ac)
+        if other:
+            applied_types.append(other.get("coupon_type", "product"))
+        else:
+            applied_types.append("product")  # personalized coupons are product-type
+    if ctype in applied_types:
+        label = "delivery" if ctype == "delivery" else "product/order"
+        raise HTTPException(status_code=400, detail=f"You can only apply one {label} coupon per order")
+
+    if ctype == "delivery":
+        if payload.delivery_charge <= 0 and payload.asap_charge <= 0:
+            raise HTTPException(status_code=400, detail="No delivery charge to discount")
+        discount = _calc_delivery_discount(coupon, payload.delivery_charge, payload.asap_charge)
+        return {"code": coupon["code"], "coupon_type": "delivery", "delivery_scope": coupon.get("delivery_scope", "both"),
+                "discount": discount, "message": "Delivery coupon applied"}
+
     if payload.subtotal < coupon.get("min_order_value", 0):
         raise HTTPException(status_code=400, detail=f"Minimum order value ₹{coupon['min_order_value']} required")
     discount = _calc_discount(coupon, payload.subtotal)
-    return {"code": coupon["code"], "discount": discount, "message": "Coupon applied"}
+    return {"code": coupon["code"], "coupon_type": "product", "discount": discount, "message": "Coupon applied"}
 
 
 @router.get("/coupons")
@@ -86,3 +133,24 @@ async def update_coupon(coupon_id: str, payload: CouponInput, admin: dict = Depe
 async def delete_coupon(coupon_id: str, admin: dict = Depends(require_admin)):
     await db.coupons.delete_one({"id": coupon_id})
     return {"message": "Coupon deleted"}
+
+
+def _rand_code(prefix: str) -> str:
+    return prefix.upper() + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+
+@router.post("/admin/coupons/bulk")
+async def bulk_create_coupons(payload: BulkCouponInput, admin: dict = Depends(require_admin)):
+    count = max(1, min(payload.count, 5000))
+    base = payload.model_dump()
+    base.pop("prefix", None)
+    base.pop("count", None)
+    created = []
+    for _ in range(count):
+        code = _rand_code(payload.prefix)
+        while await db.coupons.find_one({"code": code}):
+            code = _rand_code(payload.prefix)
+        doc = {**base, "code": code, "is_active": True, "id": gen_id(), "created_at": now_iso()}
+        await db.coupons.insert_one(doc)
+        created.append(code)
+    return {"created": len(created), "codes": created}

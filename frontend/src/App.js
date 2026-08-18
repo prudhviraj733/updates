@@ -23,11 +23,18 @@ import { Orders, OrderDetail } from "@/pages/store/Orders";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminProducts from "@/pages/admin/AdminProducts";
 import AdminCategories from "@/pages/admin/AdminCategories";
+import AdminSubcategories from "@/pages/admin/AdminSubcategories";
+import AdminBrands from "@/pages/admin/AdminBrands";
 import AdminInventory from "@/pages/admin/AdminInventory";
 import AdminLocations from "@/pages/admin/AdminLocations";
+import AdminPinCodes from "@/pages/admin/AdminPinCodes";
 import AdminOrders from "@/pages/admin/AdminOrders";
+import AdminOrderDetail from "@/pages/admin/AdminOrderDetail";
 import AdminCustomers from "@/pages/admin/AdminCustomers";
+import AdminCustomerDetail from "@/pages/admin/AdminCustomerDetail";
 import AdminDelivery from "@/pages/admin/AdminDelivery";
+import AdminDeliveryStats from "@/pages/admin/AdminDeliveryStats";
+import AdminAnalytics from "@/pages/admin/AdminAnalytics";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
 import AdminPackages from "@/pages/admin/AdminPackages";
 import AdminComboBanners from "@/pages/admin/AdminComboBanners";
@@ -67,16 +74,23 @@ function App() {
               <Route path="/admin" element={<ProtectedRoute adminOnly><AdminLayout /></ProtectedRoute>}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="orders" element={<AdminOrders />} />
+                <Route path="orders/:id" element={<AdminOrderDetail />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="categories" element={<AdminCategories />} />
+                <Route path="subcategories" element={<AdminSubcategories />} />
+                <Route path="brands" element={<AdminBrands />} />
                 <Route path="inventory" element={<AdminInventory />} />
                 <Route path="locations" element={<AdminLocations />} />
+                <Route path="pincodes" element={<AdminPinCodes />} />
                 <Route path="delivery" element={<AdminDelivery />} />
+                <Route path="delivery-stats" element={<AdminDeliveryStats />} />
+                <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="coupons" element={<AdminCoupons />} />
                 <Route path="packages" element={<AdminPackages />} />
                 <Route path="combo-banners" element={<AdminComboBanners />} />
                 <Route path="campaigns" element={<AdminCampaigns />} />
                 <Route path="customers" element={<AdminCustomers />} />
+                <Route path="customers/:id" element={<AdminCustomerDetail />} />
                 <Route path="payments" element={<AdminPayments />} />
                 <Route path="settings" element={<AdminSettings />} />
               </Route>

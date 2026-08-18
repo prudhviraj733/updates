@@ -4,15 +4,30 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
 from core.security import get_current_user, require_admin
-from models import OrderInput, OrderStatusUpdate, gen_id, now_iso
+from models import OrderInput, OrderStatusUpdate, OrderTrackingInput, gen_id, now_iso
 from routers.delivery import get_settings, compute_slots
-from routers.coupons import _calc_discount
+from routers.coupons import _calc_discount, _calc_delivery_discount
 from routers.notifications import notify_order
 
 router = APIRouter()
 
-ORDER_STATUSES = ["pending", "confirmed", "preparing", "ready_for_delivery",
+ORDER_STATUSES = ["pending", "accepted", "confirmed", "preparing", "ready_for_delivery",
                   "out_for_delivery", "delivered", "cancelled"]
+
+CUSTOMER_STATUS_MAP = {
+    "pending": "Order Placed",
+    "accepted": "Order Confirmed",
+    "confirmed": "Order Confirmed",
+    "preparing": "Being Prepared",
+    "ready_for_delivery": "Packed & Ready",
+    "out_for_delivery": "Out for Delivery",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled",
+}
+
+
+def customer_status(status: str) -> str:
+    return CUSTOMER_STATUS_MAP.get(status, status)
 
 
 async def gen_order_number() -> str:
@@ -70,6 +85,10 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
             "image": product["images"][0] if product.get("images") else "",
             "pack_size": product.get("pack_size", ""),
             "unit_price": product["selling_price"], "mrp": product.get("mrp", product["selling_price"]),
+            "cost_price": product.get("cost_price", 0),
+            "category_id": product.get("category_id"),
+            "subcategory_id": product.get("subcategory_id"),
+            "brand_id": product.get("brand_id"),
             "quantity": ci["quantity"], "line_total": round(line, 2),
         })
 
@@ -121,7 +140,20 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
     if free_delivery_applied:
         delivery_charge = 0
 
-    final_amount = round(subtotal - coupon_discount + delivery_charge + asap_charge, 2)
+    # Delivery-type coupon (stacks with 1 product coupon; discounts normal/asap/both)
+    delivery_discount = 0.0
+    delivery_coupon_code = None
+    if payload.delivery_coupon_code:
+        dcoupon = await db.coupons.find_one(
+            {"code": payload.delivery_coupon_code.upper(), "is_active": True, "coupon_type": "delivery"}, {"_id": 0})
+        if dcoupon:
+            if dcoupon.get("location_ids") and payload.location_id not in dcoupon["location_ids"]:
+                raise HTTPException(status_code=400, detail="Delivery coupon not valid for this location")
+            delivery_discount = _calc_delivery_discount(dcoupon, delivery_charge, asap_charge)
+            delivery_coupon_code = dcoupon["code"]
+
+    final_amount = round(subtotal - coupon_discount + delivery_charge + asap_charge - delivery_discount, 2)
+    final_amount = max(0.0, final_amount)
 
     # Reserve inventory atomically
     await _reserve_inventory(items, payload.location_id)
@@ -141,6 +173,8 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "product_discount": round(total_mrp - subtotal, 2),
         "coupon_code": coupon_code,
         "coupon_discount": coupon_discount,
+        "delivery_coupon_code": delivery_coupon_code,
+        "delivery_discount": delivery_discount,
         "campaign_id": campaign_id,
         "free_delivery_applied": free_delivery_applied,
         "delivery_charge": delivery_charge,
@@ -150,6 +184,10 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "slot_id": slot_id,
         "slot_label": slot_label,
         "is_priority": payload.delivery_type == "asap",
+        "accepted": False,
+        "accepted_at": None,
+        "tracking_url": None,
+        "tracking_provider": None,
         "payment_method": payload.payment_method,
         "payment_status": payment_status,
         "status": "pending",
@@ -164,6 +202,7 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
             {"$inc": {"used_count": 1}, "$set": {"redeemed_at": now_iso()}})
     await db.carts.update_one({"user_id": user["id"], "location_id": payload.location_id}, {"$set": {"items": []}})
     order.pop("_id", None)
+    order["customer_status"] = customer_status(order["status"])
     try:
         await notify_order(order, "pending")
     except Exception:
@@ -174,6 +213,8 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
 @router.get("/orders")
 async def list_my_orders(user: dict = Depends(get_current_user)):
     docs = await db.orders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for d in docs:
+        d["customer_status"] = customer_status(d.get("status"))
     return docs
 
 
@@ -184,6 +225,7 @@ async def get_order(order_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Order not found")
     if order["user_id"] != user["id"] and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Not allowed")
+    order["customer_status"] = customer_status(order.get("status"))
     return order
 
 
@@ -195,7 +237,53 @@ async def admin_list_orders(status: str = None, location_id: str = None, admin: 
         query["status"] = status
     if location_id:
         query["location_id"] = location_id
-    return await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    docs = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    for d in docs:
+        d["customer_status"] = customer_status(d.get("status"))
+    return docs
+
+
+@router.get("/admin/orders/pending-count")
+async def admin_pending_count(admin: dict = Depends(require_admin)):
+    """New (unaccepted) orders for the high-priority admin alert."""
+    new_orders = await db.orders.find(
+        {"status": "pending", "accepted": {"$ne": True}}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return {
+        "count": len(new_orders),
+        "order_ids": [o["id"] for o in new_orders],
+        "latest": new_orders[0] if new_orders else None,
+    }
+
+
+@router.put("/admin/orders/{order_id}/accept")
+async def accept_order(order_id: str, admin: dict = Depends(require_admin)):
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("accepted"):
+        return await db.orders.find_one({"id": order_id}, {"_id": 0})
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"accepted": True, "accepted_at": now_iso(), "status": "accepted", "updated_at": now_iso()},
+         "$push": {"status_history": {"status": "accepted", "at": now_iso()}}})
+    updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    try:
+        await notify_order(updated, "accepted")
+    except Exception:
+        pass
+    return updated
+
+
+@router.put("/admin/orders/{order_id}/tracking")
+async def set_tracking(order_id: str, payload: OrderTrackingInput, admin: dict = Depends(require_admin)):
+    res = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"tracking_url": payload.tracking_url, "tracking_provider": payload.tracking_provider,
+                  "updated_at": now_iso()}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return await db.orders.find_one({"id": order_id}, {"_id": 0})
 
 
 async def _apply_inventory_transition(order, new_status):
@@ -223,6 +311,15 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, admin: 
     update = {"status": payload.status, "updated_at": now_iso()}
     if payload.status == "delivered" and order.get("payment_method") == "cod":
         update["payment_status"] = "paid"
+    # Refund to wallet when cancelling a paid (online) order
+    if (payload.status == "cancelled" and order["status"] != "cancelled"
+            and order.get("payment_status") == "paid"):
+        from routers.wallet import add_wallet_entry
+        already = await db.wallet_ledger.find_one({"order_id": order_id, "reason": "refund"})
+        if not already:
+            await add_wallet_entry(order["user_id"], order.get("final_amount", 0), "refund",
+                                   order_id=order_id, notes=f"Refund for cancelled order {order.get('order_number')}")
+            update["payment_status"] = "refunded"
     await db.orders.update_one(
         {"id": order_id},
         {"$set": update, "$push": {"status_history": {"status": payload.status, "at": now_iso()}}})

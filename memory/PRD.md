@@ -79,3 +79,46 @@ Multi-location; dynamic categories; location-based inventory with safe reservati
 - **Next-day slots**: `GET /api/delivery/slots/range?days=N` (IST); checkout now shows date tabs (Today/Tomorrow/…) and can place next-day slot orders. Auto-selects first day with availability.
 - **Order alerts**: Email via managed Resend (server-side templates + safety gate) + SMS via Twilio; `notify_order()` fires on order create ('pending') and every admin status change. Best-effort/non-blocking.
 - **Razorpay**: fully wired (create-order/verify/webhook); activates when `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are set. Twilio SMS activates when `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` are set. Until then, COD + email work; Razorpay returns a graceful 503 and SMS silently skips.
+
+
+## Iteration 5 (2026-06) — MASTER PRODUCTION UPDATE (tested 36/36 backend + all admin frontend flows, iteration_4)
+Extended (not rebuilt) the existing app safely. IDs remain uuid strings (gen_id); users use ObjectId with user_id = str(_id).
+
+### Phase 1 — Catalog & Location
+- `Brand` model + `brands` collection + router (`GET /api/brands`, admin CRUD `/api/admin/brands`).
+- Subcategories via `categories` collection with `parent_id`: `GET /api/subcategories?category_id=`, `GET /api/admin/subcategories`. Parent `/categories` now returns parent-only. Product create requires category_id + subcategory_id (brand optional).
+- `Product` gained `brand_id` + `cost_price` (for profitability). Product filters add subcategory_id/brand_id.
+- PIN code serviceability: `pincodes` collection + router. Public `GET /api/pincodes/check?pincode=` → parent location + min order + delivery charge + PIN-specific discount. Admin CRUD `/api/admin/pincodes` (rejects duplicates).
+- Idempotent seed backfill: brands, subcategories, pincodes (from location pincodes), product cost_price (72% of SP), and existing order-item cost/category/brand snapshots so analytics is meaningful.
+
+### Phase 2 — Admin reorg into exactly 8 sections
+AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Categories/Subcategories/Brands/Inventory/Monthly Combos/Combo Banners), Sales & Analytics, Coupons & Discounts (Coupons/Personalized Offers), Customer Info, Delivery Info & Stats (Locations/PIN Codes/Delivery & Slots/PIN-wise Stats), Personal Settings (Business Settings/Payments).
+
+### Phase 3 — Orders & Delivery Tracking
+- Internal statuses: pending→accepted→confirmed→preparing→ready_for_delivery→out_for_delivery→delivered / cancelled. Customer-facing map via `customer_status`.
+- New orders start `accepted=false`; `GET /api/admin/orders/pending-count` powers high-priority alert (AdminOrders beep + vibrate + red banner, 15s poll). `PUT /api/admin/orders/{id}/accept`.
+- Optional manual tracking link (rapido/google_maps/other) via `PUT /api/admin/orders/{id}/tracking` — editable anytime.
+- Detailed order page `AdminOrderDetail.js` (replaces popup): items, payment summary, timeline, accept/status/tracking.
+
+### Phase 4 — Sales & Analytics (Financial Control Center) — `analytics.py`
+- `/api/admin/analytics/overview` (net_revenue, cogs, gross_profit, margin%, gateway_fees ~2%, refunds, expenses, contribution, estimated_profit, delivery_revenue, asap_revenue).
+- `/products` (profitability by product/category/brand), `/carts` (in-cart + abandoned + value), `/coupons`, `/payments`, `/pin-stats` (PIN-wise orders/sales/AOV/customers/asap).
+- Expenses CRUD `/api/admin/expenses`. `AdminAnalytics.js` + `AdminDeliveryStats.js`.
+
+### Phase 5 — Coupon stacking & bulk
+- `CouponInput.coupon_type` (product|delivery) + `delivery_scope` (normal|asap|both) + usage limits. Server rule enforced in `/api/coupons/validate`: max 1 product + 1 delivery coupon (applied_codes checked). Delivery coupon discounts normal/asap/both per scope.
+- `OrderInput.delivery_coupon_code`; order create applies BOTH coupons; stores delivery_discount/delivery_coupon_code. Checkout supports stacked coupons.
+- Bulk generator `POST /api/admin/coupons/bulk` (up to 5000 unique). No arbitrary limits anywhere.
+
+### Phase 6 — Wallet, Referral, Customer 360
+- Wallet ledger (`wallet_ledger`): `GET /api/me/wallet`, admin `GET /api/admin/wallet/{uid}` + `POST /api/admin/wallet/adjust`. Cancelling a PAID order auto-refunds to wallet (payment_status=refunded), guarded against duplicates.
+- Referral: lazy `referral_code` on users; `GET /api/me/referral`; `POST /api/referral/apply?code=` credits referrer ₹100 + referee ₹50 (rejects self/duplicate).
+- Customer 360 `GET /api/admin/customers/{uid}/full`: profile, summary, orders, behaviour, addresses, coupons, wallet ledger, referrals, abandoned carts. `AdminCustomerDetail.js` with wallet adjust/refund.
+
+### Backlog / P2 (from iteration_4 code review — non-blocking)
+- Batch N+1 product lookups ($in) in analytics/carts, customer_360, order create, coupon validate.
+- Wallet balance_after recompute is O(n)/race-prone → use atomic $inc on a wallet doc; add unique index on (order_id, reason=refund).
+- customers.favourite_products keyed by name (collision risk) → key by product_id.
+- Move RAZORPAY_FEE_PCT to settings; pincode update should re-validate location_id.
+- Customer-facing wallet/referral UI pages + order tracking display + PIN serviceability check at checkout (backend ready).
+- Mobile app: still a scaffold; new features NOT yet ported.

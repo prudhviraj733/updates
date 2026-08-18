@@ -29,6 +29,8 @@ async def enrich(product: dict, location_id: Optional[str] = None) -> dict:
 @router.get("/products")
 async def list_products(
     category_id: Optional[str] = None,
+    subcategory_id: Optional[str] = None,
+    brand_id: Optional[str] = None,
     location_id: Optional[str] = None,
     search: Optional[str] = None,
     featured: Optional[bool] = None,
@@ -36,6 +38,10 @@ async def list_products(
     query = {"is_active": True}
     if category_id:
         query["category_id"] = category_id
+    if subcategory_id:
+        query["subcategory_id"] = subcategory_id
+    if brand_id:
+        query["brand_id"] = brand_id
     if location_id:
         query["location_ids"] = location_id
     if featured is not None:

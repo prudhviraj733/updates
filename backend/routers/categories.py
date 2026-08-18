@@ -9,14 +9,31 @@ router = APIRouter()
 
 @router.get("/categories")
 async def list_categories():
-    docs = await db.categories.find({"is_active": True}, {"_id": 0}).to_list(500)
+    docs = await db.categories.find({"is_active": True, "parent_id": None}, {"_id": 0}).to_list(500)
+    docs.sort(key=lambda d: d.get("display_order", 0))
+    return docs
+
+
+@router.get("/subcategories")
+async def list_subcategories(category_id: str = None):
+    query = {"is_active": True, "parent_id": {"$ne": None}}
+    if category_id:
+        query["parent_id"] = category_id
+    docs = await db.categories.find(query, {"_id": 0}).to_list(1000)
+    docs.sort(key=lambda d: d.get("display_order", 0))
+    return docs
+
+
+@router.get("/admin/subcategories")
+async def admin_list_subcategories(admin: dict = Depends(require_admin)):
+    docs = await db.categories.find({"parent_id": {"$ne": None}}, {"_id": 0}).to_list(2000)
     docs.sort(key=lambda d: d.get("display_order", 0))
     return docs
 
 
 @router.get("/admin/categories")
 async def admin_list_categories(admin: dict = Depends(require_admin)):
-    docs = await db.categories.find({}, {"_id": 0}).to_list(500)
+    docs = await db.categories.find({"parent_id": None}, {"_id": 0}).to_list(500)
     docs.sort(key=lambda d: d.get("display_order", 0))
     return docs
 

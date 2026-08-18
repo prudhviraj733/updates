@@ -117,17 +117,52 @@ class CategoryInput(BaseModel):
     is_active: bool = True
 
 
+# ---------- Brand ----------
+class BrandInput(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    logo_url: Optional[str] = ""
+    display_order: int = 0
+    is_active: bool = True
+
+
+# ---------- Subcategory ----------
+class SubcategoryInput(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    image_url: Optional[str] = ""
+    category_id: str
+    display_order: int = 0
+    is_active: bool = True
+
+
+# ---------- PIN Code ----------
+class PinCodeInput(BaseModel):
+    pincode: str
+    location_id: str
+    area_name: Optional[str] = ""
+    is_serviceable: bool = True
+    min_order_value: float = 0
+    delivery_charge: Optional[float] = None
+    discount_type: Optional[str] = None       # percentage | fixed | None
+    discount_value: float = 0
+    max_discount: Optional[float] = None
+    notes: Optional[str] = ""
+
+
 # ---------- Product ----------
 class ProductInput(BaseModel):
     name: str
     description: Optional[str] = ""
     category_id: str
     subcategory_id: Optional[str] = None
+    brand_id: Optional[str] = None
     images: List[str] = []
     pack_size: str = ""
     unit: str = ""
     mrp: float = 0
     selling_price: float = 0
+    cost_price: float = 0
     sku: str = ""
     is_active: bool = True
     is_featured: bool = False
@@ -157,7 +192,9 @@ class CartUpdateInput(BaseModel):
 # ---------- Coupon ----------
 class CouponInput(BaseModel):
     code: str
-    discount_type: str = "percentage"  # percentage | fixed
+    coupon_type: str = "product"        # product | delivery
+    delivery_scope: str = "both"        # normal | asap | both (only for delivery coupons)
+    discount_type: str = "percentage"   # percentage | fixed
     discount_value: float = 0
     min_order_value: float = 0
     max_discount: Optional[float] = None
@@ -166,12 +203,54 @@ class CouponInput(BaseModel):
     is_active: bool = True
     location_ids: List[str] = []
     category_ids: List[str] = []
+    usage_limit: Optional[int] = None            # total redemptions allowed
+    usage_limit_per_customer: Optional[int] = None
+    campaign_tag: Optional[str] = None           # groups bulk-generated coupons
+
+
+class BulkCouponInput(BaseModel):
+    prefix: str = "SAVE"
+    count: int = 10
+    coupon_type: str = "product"
+    delivery_scope: str = "both"
+    discount_type: str = "percentage"
+    discount_value: float = 0
+    min_order_value: float = 0
+    max_discount: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    location_ids: List[str] = []
+    usage_limit: Optional[int] = 1
+    usage_limit_per_customer: Optional[int] = 1
+    campaign_tag: Optional[str] = None
 
 
 class CouponValidateInput(BaseModel):
     code: str
     location_id: str
     subtotal: float
+    delivery_charge: float = 0
+    asap_charge: float = 0
+    applied_codes: List[str] = []
+
+
+# ---------- Expense ----------
+class ExpenseInput(BaseModel):
+    title: str
+    category: str = "operations"   # operations | marketing | logistics | salaries | rent | other
+    amount: float = 0
+    location_id: Optional[str] = None
+    date: Optional[str] = None
+    notes: Optional[str] = ""
+
+
+# ---------- Wallet ----------
+class WalletAdjustInput(BaseModel):
+    user_id: str
+    amount: float                  # positive = credit, negative = debit
+    reason: str = "adjustment"
+    order_id: Optional[str] = None
+    notes: Optional[str] = ""
 
 
 # ---------- Package ----------
@@ -194,10 +273,16 @@ class OrderInput(BaseModel):
     slot_id: Optional[str] = None
     payment_method: str = "cod"  # cod | razorpay
     coupon_code: Optional[str] = None
+    delivery_coupon_code: Optional[str] = None
 
 
 class OrderStatusUpdate(BaseModel):
     status: str
+
+
+class OrderTrackingInput(BaseModel):
+    tracking_url: str
+    tracking_provider: Optional[str] = ""   # rapido | google_maps | other
 
 
 # ---------- Settings ----------

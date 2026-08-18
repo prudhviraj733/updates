@@ -209,8 +209,137 @@ async def seed_combos_and_banners():
         order += 1
 
 
+async def seed_catalog_extensions():
+    """Idempotent backfill: brands, subcategories, pincodes, product cost_price/brand/subcategory."""
+    # ---- Brands ----
+    brand_defs = ["India Gate", "Fortune", "Tata", "Aashirvaad", "Freshly Select"]
+    brand_ids = {}
+    for i, bname in enumerate(brand_defs):
+        b = await db.brands.find_one({"name": bname}, {"_id": 0})
+        if not b:
+            bid = gen_id()
+            await db.brands.insert_one({
+                "id": bid, "name": bname, "description": f"{bname} products",
+                "logo_url": "", "display_order": i, "is_active": True,
+                "created_at": now_iso(), "updated_at": now_iso(),
+            })
+            brand_ids[bname] = bid
+        else:
+            brand_ids[bname] = b["id"]
+
+    def brand_for(name: str) -> str:
+        n = name.lower()
+        if "india gate" in n or "basmati" in n:
+            return brand_ids["India Gate"]
+        if "fortune" in n or "oil" in n:
+            return brand_ids["Fortune"]
+        if "atta" in n or "wheat" in n:
+            return brand_ids["Aashirvaad"]
+        if "tea" in n or "coffee" in n or "salt" in n or "sugar" in n:
+            return brand_ids["Tata"]
+        return brand_ids["Freshly Select"]
+
+    # ---- Subcategories ----
+    sub_map = {
+        "Rice": ["Basmati Rice", "Non-Basmati Rice"],
+        "Dals & Pulses": ["Split Dals", "Whole Pulses"],
+        "Flours": ["Wheat Flours", "Specialty Flours"],
+        "Oils": ["Cooking Oils", "Ghee"],
+        "Sugar & Salt": ["Sugar", "Salt"],
+        "Spices": ["Ground Spices", "Whole Spices"],
+        "Grocery Essentials": ["Beverages", "Staples"],
+        "Dry Fruits": ["Almonds & Cashews", "Raisins & Berries"],
+        "Nuts": ["Premium Nuts", "Everyday Nuts"],
+    }
+    parents = await db.categories.find({"parent_id": None}, {"_id": 0}).to_list(500)
+    sub_ids = {}  # (parent_name, sub_name) -> id  ; also first-sub per parent
+    first_sub = {}  # parent_id -> sub_id
+    for p in parents:
+        subs = sub_map.get(p["name"], ["General"])
+        for j, sname in enumerate(subs):
+            existing = await db.categories.find_one({"name": sname, "parent_id": p["id"]}, {"_id": 0})
+            if existing:
+                sid = existing["id"]
+            else:
+                sid = gen_id()
+                await db.categories.insert_one({
+                    "id": sid, "name": sname, "description": f"{sname} in {p['name']}",
+                    "image_url": p.get("image_url", ""), "parent_id": p["id"],
+                    "display_order": j, "is_active": True,
+                    "created_at": now_iso(), "updated_at": now_iso(),
+                })
+            sub_ids[(p["id"], sname)] = sid
+            if p["id"] not in first_sub:
+                first_sub[p["id"]] = sid
+
+    def sub_for(cat_id: str, name: str):
+        n = name.lower()
+        # try keyword matching within this category's subs
+        for (pid, sname), sid in sub_ids.items():
+            if pid != cat_id:
+                continue
+            key = sname.lower().split()[0]
+            if key in n:
+                return sid
+        return first_sub.get(cat_id)
+
+    # ---- Backfill products ----
+    async for prod in db.products.find({}):
+        updates = {}
+        if not prod.get("brand_id"):
+            updates["brand_id"] = brand_for(prod.get("name", ""))
+        if not prod.get("subcategory_id"):
+            sid = sub_for(prod.get("category_id"), prod.get("name", ""))
+            if sid:
+                updates["subcategory_id"] = sid
+        if not prod.get("cost_price"):
+            updates["cost_price"] = round(prod.get("selling_price", 0) * 0.72, 2)
+        if updates:
+            await db.products.update_one({"id": prod["id"]}, {"$set": updates})
+
+    # ---- PIN codes from existing locations ----
+    locs = await db.locations.find({}, {"_id": 0}).to_list(500)
+    for loc in locs:
+        for pc in loc.get("pincodes", []):
+            if not await db.pincodes.find_one({"pincode": pc}):
+                await db.pincodes.insert_one({
+                    "id": gen_id(), "pincode": pc, "location_id": loc["id"],
+                    "area_name": loc.get("area", ""), "is_serviceable": True,
+                    "min_order_value": loc.get("min_order_value", 0),
+                    "delivery_charge": loc.get("delivery_charge", 0),
+                    "discount_type": None, "discount_value": 0, "max_discount": None,
+                    "notes": "", "created_at": now_iso(), "updated_at": now_iso(),
+                })
+
+    # ---- Backfill coupon_type on existing coupons ----
+    await db.coupons.update_many({"coupon_type": {"$exists": False}},
+                                 {"$set": {"coupon_type": "product", "delivery_scope": "both"}})
+
+    # ---- Backfill order item snapshots (cost/category/brand) for analytics ----
+    async for order in db.orders.find({}):
+        items = order.get("items", [])
+        changed = False
+        for it in items:
+            if "cost_price" not in it or "category_id" not in it:
+                p = await db.products.find_one({"id": it.get("product_id")}, {"_id": 0})
+                if p:
+                    it.setdefault("cost_price", p.get("cost_price", round(p.get("selling_price", 0) * 0.72, 2)))
+                    it["category_id"] = p.get("category_id")
+                    it["subcategory_id"] = p.get("subcategory_id")
+                    it["brand_id"] = p.get("brand_id")
+                    changed = True
+        upd = {}
+        if changed:
+            upd["items"] = items
+        if "accepted" not in order:
+            upd["accepted"] = order.get("status") not in ("pending",)
+        if upd:
+            await db.orders.update_one({"id": order["id"]}, {"$set": upd})
+
+
 async def run_seed():
     await seed_admin()
     await seed_data()
     await seed_combos_and_banners()
+    await seed_catalog_extensions()
     await write_credentials()
