@@ -13,6 +13,14 @@ DEFAULTS = {
     "currency": "INR",
     "cod_enabled": True,
     "online_payment_enabled": True,
+    "cashback_enabled": True,
+    "cashback_percent": 2.0,
+    "cashback_max": 50.0,
+    "milestone_enabled": True,
+    "milestone_rewards": {"5": 100, "10": 250},
+    "withdrawals_enabled": True,
+    "min_withdrawal": 100.0,
+    "withdrawable_sources": ["topup", "refund"],
 }
 
 

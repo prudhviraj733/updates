@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Layers } from "lucide-react";
 import api, { inr } from "@/lib/api";
@@ -14,6 +15,9 @@ const EMPTY = { code: "", coupon_type: "product", delivery_scope: "both", discou
 const BULK_EMPTY = { prefix: "SAVE", count: 10, coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: null, usage_limit: 1, usage_limit_per_customer: 1 };
 
 export default function AdminCoupons() {
+  const [params] = useSearchParams();
+  const typeFilter = params.get("type");
+  const scopeFilter = params.get("scope");
   const [coupons, setCoupons] = useState([]);
   const [open, setOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -23,6 +27,18 @@ export default function AdminCoupons() {
 
   const load = () => api.get("/admin/coupons").then(({ data }) => setCoupons(data));
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const action = params.get("action");
+    if (action === "create") { setEditing(null); setForm({ ...EMPTY, coupon_type: typeFilter === "delivery" ? "delivery" : "product", delivery_scope: scopeFilter || "both" }); setOpen(true); }
+    else if (action === "bulk") { setBulk({ ...BULK_EMPTY, coupon_type: typeFilter === "delivery" ? "delivery" : "product" }); setBulkOpen(true); }
+  }, [params]); // eslint-disable-line
+
+  const visible = coupons.filter((c) => {
+    if (typeFilter && (c.coupon_type || "product") !== typeFilter) return false;
+    if (scopeFilter && c.coupon_type === "delivery" && !["both", scopeFilter].includes(c.delivery_scope)) return false;
+    return true;
+  });
 
   const save = async () => {
     const payload = { ...form, discount_value: Number(form.discount_value), min_order_value: Number(form.min_order_value), max_discount: form.max_discount ? Number(form.max_discount) : null, usage_limit: form.usage_limit ? Number(form.usage_limit) : null, usage_limit_per_customer: form.usage_limit_per_customer ? Number(form.usage_limit_per_customer) : null };
@@ -43,7 +59,7 @@ export default function AdminCoupons() {
   return (
     <div data-testid="admin-coupons">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold">Coupons &amp; Discounts</h1><p className="text-sm text-slate-500">{coupons.length} coupons · max 1 product + 1 delivery coupon per order</p></div>
+        <div><h1 className="text-2xl font-bold">Coupons &amp; Discounts</h1><p className="text-sm text-slate-500">{visible.length} coupons{typeFilter ? ` · ${typeFilter}${scopeFilter ? ` (${scopeFilter})` : ""}` : ""} · max 1 product + 1 delivery coupon per order</p></div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => { setBulk(BULK_EMPTY); setBulkOpen(true); }} data-testid="bulk-coupon-btn"><Layers className="mr-1 h-4 w-4" />Bulk Generate</Button>
           <Button className="bg-forest hover:bg-forest-dark" onClick={() => { setEditing(null); setForm(EMPTY); setOpen(true); }} data-testid="add-coupon-btn"><Plus className="mr-1 h-4 w-4" />Add Coupon</Button>
@@ -51,7 +67,7 @@ export default function AdminCoupons() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {coupons.map((c) => (
+        {visible.map((c) => (
           <div key={c.id} className="rounded-xl border bg-white p-5" data-testid={`coupon-card-${c.id}`}>
             <div className="flex items-center justify-between">
               <p className="font-mono text-lg font-bold text-forest">{c.code}</p>

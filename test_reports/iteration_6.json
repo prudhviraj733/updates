@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 6 (backend + frontend) for Wallet Top-up 503, Withdrawal lifecycle, Cashback+Milestone, Analytics (wallet/referrals/balances), Settings, and Admin sidebar (8 groups + all sub-items). Backend: 12/12 pytest cases PASSED (test_wallet_iter6.py) — Razorpay 503 graceful; withdrawal hold/approve/complete/reject-with-refund reversal all work; below-min & above-withdrawable rejections work; default sources correctly make admin_credit/cashback non-withdrawable; cashback is idempotent on re-delivered orders; analytics endpoints and balances overview return the required shapes; settings persist. Frontend: exact 8 top-level nav groups render and every sub-item (Catalog=7, Sales&Analytics=10 tab links, Coupons=7 with dialogs for create/bulk, Customer Info=5, Delivery=6, Personal=2) navigates to a working non-blank page. Admin Wallet Management shows liability/withdrawals/balances. Admin Settings shows all cashback/milestone/withdrawal testids and 7 wsrc-* source chips. Customer /wallet shows Add Money dialog with graceful red toast 'Online payment is not configured. Please add Razorpay keys.' and Withdraw dialog opens with amount/method/upi fields. One bug found: withdrawable_balance is under-counted after a rejected withdrawal because the original hold ledger entry (source='withdrawal') is not cleared/negated — so the added refund credit is offset by the still-standing hold in gross-held math. Impact: customer cannot re-withdraw money that was refunded from a rejected withdrawal.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "routers/wallet.py withdrawable_balance() + update_withdrawal(rejected/failed)", "issue": "On reject/fail, code inserts a +refund credit entry but leaves the original -withdrawal hold entry as-is. `withdrawable_balance` computes gross-of-allowed-sources minus abs(all withdrawal-source entries), so the refund credit is exactly offset by the still-present hold. Net effect: total balance is correct but withdrawable_balance is 0 for the refunded amount. Fix: on reject/fail, either (a) delete/mark-cancelled the hold ledger entry and exclude cancelled from `held` sum, or (b) set the hold entry source to 'withdrawal_reversed' and skip that source in `held` calc."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Wallet.js Withdraw dialog submit button", "issue": "Submit button lacks data-testid=\"withdraw-submit\" (visible label 'Request withdrawal' works via role/name but testid contract from spec is missing).", "selector": "button:has-text('Request withdrawal')", "priority": "LOW"},
+      {"component": "AdminWalletManagement.js", "issue": "Status filter chips do not appear to expose data-testid=\"wm-filter-*\" (0 found). Approve button testid also not exposed (only 1 fallback button found via text). Feature works visually but automated status-filter testing lacks selectors.", "selector": "[data-testid^='wm-filter-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wallet_iter6.py",
+    "/app/test_reports/pytest/iter6.xml"
+  ],
+  "action_items": [
+    "Fix withdrawable_balance math for rejected/failed withdrawals so the refunded amount becomes withdrawable again (see backend minor above). Suggested one-liner: on reject/fail, either update the hold ledger row {source:'withdrawal',status:'pending'} to {status:'cancelled'} and change `held` sum to only consider status in ('pending','processing','completed') OR change source to 'withdrawal_reversed'. Then re-verify with test_wallet_iter6.test_withdrawable_and_withdraw_flow (extend it to re-attempt a withdraw after reject).",
+    "Add data-testid='withdraw-submit' to Wallet.js Withdraw dialog submit button.",
+    "Add data-testid='wm-filter-{status}' chips and 'wm-approve-{id}'/'wm-reject-{id}' action buttons to AdminWalletManagement for cleaner e2e."
+  ],
+  "critical_code_review_comments": [
+    "routers/wallet.py withdrawable_balance: current logic double-counts a rejected hold — see action item above.",
+    "routers/wallet.py add_wallet_entry recomputes balance_after by full-scan of ledger for every insert (O(n) per write). Under any real concurrency this races and returns incorrect balance_after. Cache balance on user or move to atomic $inc on a user wallet doc.",
+    "routers/wallet.py wallet_balance and withdrawable_balance both scan the full ledger for every request; withdrawable_balance calls wallet_balance internally so effectively iterates the ledger twice per call. Cache or aggregate.",
+    "routers/wallet.py admin_wallet_balances iterates users sequentially and calls wallet_balance + withdrawable_balance per user (each O(n) scans). For N customers with M ledger entries this is O(N*M). Use a single $group aggregation.",
+    "routers/orders.py _grant_rewards: milestone dedup uses (source='milestone', notes=note) — safer to key on (order_id, source='milestone') so re-delivering the same order twice cannot ever double-credit.",
+    "routers/wallet.py update_withdrawal: does not clear/negate the original hold entry (see main bug).",
+    "routers/settings.py load_settings merges DEFAULTS on top of persisted doc every read but does NOT persist DEFAULTS on first read — so PUT of a partial payload can end up with a stored doc missing several defaults (mostly OK because of merge but confusing).",
+    "routers/wallet.py request_withdrawal fetches customer_name via ObjectId(user['id']) — will 500 (not 400) if a non-ObjectId user id sneaks in; wrap try/except and validate."
+  ],
+  "updated_files": ["/app/backend/tests/test_wallet_iter6.py"],
+  "success_rate": {"backend": "100% (12/12 test_wallet_iter6)", "frontend": "~95% (all 8 groups + every sub-item load; wallet + settings + wallet-mgmt visible; 2 minor missing testids; 1 real math bug on withdrawable after reject)"},
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345; Customer customer@test.com / Test@12345.",
+  "seed_data_creation": "During testing: 1 admin_credit +₹300 (TEST_topup_grant), 1 completed withdrawal ₹200 UPI, 1 rejected withdrawal ₹100 UPI (refund +₹100 added back), 1 additional delivered order granted cashback via /admin/orders/{id}/status=delivered. Settings withdrawable_sources was temporarily set to ['topup','refund','admin_credit'] and RESTORED to ['topup','refund'] at end of test suite (test_zzz_restore_defaults).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_wallet_iter6.py -n 0 -v`. Real bug to retest after fix: refunded amount from a rejected withdrawal should become withdrawable again. Add an assertion after the reject step: withdraw a small amount (e.g. ₹100) again — should succeed with 200 (currently would 400 because withdrawable=0).",
+  "rca_of_the_issue": "Rejection reversal bug: routers/wallet.py update_withdrawal() on status in ('rejected','failed') inserts a positive refund ledger entry but leaves the original hold entry (source='withdrawal', amount=-N) untouched. withdrawable_balance() sums abs(amount) for source='withdrawal' as `held`, and sums positive amounts with source in withdrawable_sources as `gross`. The refund is included in gross AND the hold remains in held ⇒ gross - held includes 0 net gain from the reversal, capping withdrawable at 0 for that amount. Fix by updating the hold entry status to 'cancelled' and excluding non-active/non-completed statuses from `held`, OR change hold source to 'withdrawal_reversed' on reject/fail."
+}

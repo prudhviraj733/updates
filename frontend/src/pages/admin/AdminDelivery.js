@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Zap } from "lucide-react";
 import api from "@/lib/api";
@@ -8,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 export default function AdminDelivery() {
+  const [params] = useSearchParams();
+  const section = params.get("section");
+  const SECTION_TITLE = { charges: "Delivery Charges", slots: "Delivery Slots", asap: "ASAP Delivery" };
   const [locations, setLocations] = useState([]);
   const [locId, setLocId] = useState("");
   const [settings, setSettings] = useState(null);
@@ -38,8 +42,8 @@ export default function AdminDelivery() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold">Delivery & Slots</h1>
-      <p className="text-sm text-slate-500">Configure operating hours, slots, lead time & ASAP</p>
+      <h1 className="text-2xl font-bold">{section ? SECTION_TITLE[section] : "Delivery & Slots"}</h1>
+      <p className="text-sm text-slate-500">Configure operating hours, slots, lead time, delivery charge & ASAP per location</p>
       <select className="mt-4 rounded-md border p-2 text-sm" value={locId} onChange={(e) => setLocId(e.target.value)} data-testid="delivery-location-select">
         {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
       </select>

@@ -20,20 +20,48 @@ const NAV = [
       { to: "/admin/combo-banners", label: "Combo Banners" },
     ],
   },
-  { icon: BarChart3, label: "Sales & Analytics", to: "/admin/analytics" },
   {
-    icon: Ticket, label: "Coupons & Discounts", children: [
-      { to: "/admin/coupons", label: "Coupons" },
-      { to: "/admin/campaigns", label: "Personalized Offers" },
+    icon: BarChart3, label: "Sales & Analytics", children: [
+      { to: "/admin/analytics?tab=sales", label: "Sales" },
+      { to: "/admin/analytics?tab=products", label: "Product Analytics" },
+      { to: "/admin/analytics?tab=carts", label: "Cart & Abandonment" },
+      { to: "/admin/analytics?tab=profitability", label: "Profitability" },
+      { to: "/admin/analytics?tab=discounts", label: "Discounts" },
+      { to: "/admin/analytics?tab=coupons", label: "Coupon Analytics" },
+      { to: "/admin/analytics?tab=referrals", label: "Referral Analytics" },
+      { to: "/admin/analytics?tab=wallet", label: "Wallet Analytics" },
+      { to: "/admin/analytics?tab=payments", label: "Payment Analytics" },
+      { to: "/admin/analytics?tab=reports", label: "Financial Reports" },
     ],
   },
-  { icon: Users, label: "Customer Info", to: "/admin/customers" },
+  {
+    icon: Ticket, label: "Coupons & Discounts", children: [
+      { to: "/admin/coupons", label: "Coupon Campaigns" },
+      { to: "/admin/coupons?action=create", label: "Create Coupon" },
+      { to: "/admin/coupons?action=bulk", label: "Bulk Coupon Codes" },
+      { to: "/admin/coupons?type=product", label: "Product/Order Discounts" },
+      { to: "/admin/coupons?type=delivery", label: "Delivery Discounts" },
+      { to: "/admin/coupons?type=delivery&scope=asap", label: "ASAP Discounts" },
+      { to: "/admin/campaigns", label: "Personalized Coupons" },
+    ],
+  },
+  {
+    icon: Users, label: "Customer Info", children: [
+      { to: "/admin/customers", label: "Customers" },
+      { to: "/admin/customers?view=360", label: "Customer 360" },
+      { to: "/admin/customer-behaviour", label: "Customer Behaviour" },
+      { to: "/admin/abandoned-carts", label: "Abandoned Carts" },
+      { to: "/admin/wallet-management", label: "Wallet Management" },
+    ],
+  },
   {
     icon: Truck, label: "Delivery Info & Stats", children: [
       { to: "/admin/locations", label: "Locations" },
       { to: "/admin/pincodes", label: "PIN Codes" },
-      { to: "/admin/delivery", label: "Delivery & Slots" },
-      { to: "/admin/delivery-stats", label: "PIN-wise Stats" },
+      { to: "/admin/delivery?section=charges", label: "Delivery Charges" },
+      { to: "/admin/delivery?section=slots", label: "Delivery Slots" },
+      { to: "/admin/delivery?section=asap", label: "ASAP" },
+      { to: "/admin/delivery-stats", label: "PIN-wise Statistics" },
     ],
   },
   {
@@ -44,22 +72,17 @@ const NAV = [
   },
 ];
 
+const tid = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "");
+
 function NavGroup({ item, pathname }) {
-  const childActive = item.children?.some((c) => pathname.startsWith(c.to));
-  const [open, setOpen] = useState(childActive);
+  const childActive = item.children?.some((c) => pathname.startsWith(c.to.split("?")[0]) && c.to.split("?")[0] !== "/admin/customers" ? pathname.startsWith(c.to.split("?")[0]) : false);
+  const groupActive = item.children?.some((c) => pathname === c.to.split("?")[0]);
+  const [open, setOpen] = useState(groupActive);
 
   if (!item.children) {
     return (
-      <NavLink
-        to={item.to}
-        end={item.end}
-        data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/-$/, "")}`}
-        className={({ isActive }) =>
-          `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-            isActive ? "bg-forest text-white" : "hover:bg-white/5 hover:text-white"
-          }`
-        }
-      >
+      <NavLink to={item.to} end={item.end} data-testid={`nav-${tid(item.label)}`}
+        className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? "bg-forest text-white" : "hover:bg-white/5 hover:text-white"}`}>
         <item.icon className="h-4 w-4" /> {item.label}
       </NavLink>
     );
@@ -67,29 +90,16 @@ function NavGroup({ item, pathname }) {
 
   return (
     <div>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        data-testid={`nav-group-${item.label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/-$/, "")}`}
-        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-          childActive ? "text-white" : "hover:bg-white/5 hover:text-white"
-        }`}
-      >
+      <button onClick={() => setOpen((o) => !o)} data-testid={`nav-group-${tid(item.label)}`}
+        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${groupActive ? "text-white" : "hover:bg-white/5 hover:text-white"}`}>
         <item.icon className="h-4 w-4" /> {item.label}
         <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
           {item.children.map((c) => (
-            <NavLink
-              key={c.to}
-              to={c.to}
-              data-testid={`nav-${c.label.toLowerCase().replace(/[^a-z]+/g, "-").replace(/-$/, "")}`}
-              className={({ isActive }) =>
-                `block rounded-md px-3 py-1.5 text-sm transition-colors ${
-                  isActive ? "bg-forest text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`
-              }
-            >
+            <NavLink key={c.to} to={c.to} end data-testid={`nav-${tid(c.label)}`}
+              className={({ isActive }) => `block rounded-md px-3 py-1.5 text-sm transition-colors ${isActive ? "bg-forest text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}>
               {c.label}
             </NavLink>
           ))}
@@ -127,6 +137,7 @@ export function AdminLayout() {
             <NavLink to="/admin/orders" className={({ isActive }) => `whitespace-nowrap rounded-md px-2 py-1 text-xs ${isActive ? "bg-forest text-white" : "text-slate-600"}`}>Orders</NavLink>
             <NavLink to="/admin/products" className={({ isActive }) => `whitespace-nowrap rounded-md px-2 py-1 text-xs ${isActive ? "bg-forest text-white" : "text-slate-600"}`}>Catalog</NavLink>
             <NavLink to="/admin/analytics" className={({ isActive }) => `whitespace-nowrap rounded-md px-2 py-1 text-xs ${isActive ? "bg-forest text-white" : "text-slate-600"}`}>Analytics</NavLink>
+            <NavLink to="/admin/coupons" className={({ isActive }) => `whitespace-nowrap rounded-md px-2 py-1 text-xs ${isActive ? "bg-forest text-white" : "text-slate-600"}`}>Coupons</NavLink>
             <NavLink to="/admin/customers" className={({ isActive }) => `whitespace-nowrap rounded-md px-2 py-1 text-xs ${isActive ? "bg-forest text-white" : "text-slate-600"}`}>Customers</NavLink>
           </div>
           <div className="ml-auto text-sm text-slate-600">{user?.name} · <span className="text-forest">Admin</span></div>

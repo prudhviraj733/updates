@@ -41,6 +41,9 @@ import AdminCoupons from "@/pages/admin/AdminCoupons";
 import AdminPackages from "@/pages/admin/AdminPackages";
 import AdminComboBanners from "@/pages/admin/AdminComboBanners";
 import AdminCampaigns from "@/pages/admin/AdminCampaigns";
+import AdminWalletManagement from "@/pages/admin/AdminWalletManagement";
+import AdminAbandonedCarts from "@/pages/admin/AdminAbandonedCarts";
+import AdminCustomerBehaviour from "@/pages/admin/AdminCustomerBehaviour";
 import AdminPayments from "@/pages/admin/AdminPayments";
 import AdminSettings from "@/pages/admin/AdminSettings";
 
@@ -95,6 +98,9 @@ function App() {
                 <Route path="campaigns" element={<AdminCampaigns />} />
                 <Route path="customers" element={<AdminCustomers />} />
                 <Route path="customers/:id" element={<AdminCustomerDetail />} />
+                <Route path="customer-behaviour" element={<AdminCustomerBehaviour />} />
+                <Route path="abandoned-carts" element={<AdminAbandonedCarts />} />
+                <Route path="wallet-management" element={<AdminWalletManagement />} />
                 <Route path="payments" element={<AdminPayments />} />
                 <Route path="settings" element={<AdminSettings />} />
               </Route>

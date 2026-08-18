@@ -131,3 +131,25 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - **Live Order Tracking** (`Orders.js`): customer_status badges; order detail shows a 6-step journey timeline with timestamps (from status_history) and a "Live tracking" button linking to the admin-set Rapido/Maps tracking_url when out_for_delivery. Order summary now shows delivery-coupon + wallet lines.
 - Header account menu gained "My Wallet" + "Refer & Earn"; routes `/wallet` `/referral` (protected).
 - Backlog still open: customer-facing wallet UI error-retry; LocationModal aria-describedby; plus all P2 items from iteration 5 (N+1 batching, atomic wallet balance, mobile app port).
+
+## Iteration 7 (2026-06) — Wallet Add-Money/Withdrawal, Cashback/Milestone, Admin Nav expansion (tested: backend 12/12 pytest + frontend 8-group nav, iteration_6)
+### Wallet Add Money (Razorpay top-up)
+- `POST /api/me/wallet/topup/create-order` (Razorpay order) → `POST /api/me/wallet/topup/verify` (signature verify). Idempotent: credits once per payment_id; `wallet_topups` collection tracks status. Source-tagged `topup`. Razorpay keys MOCKED → create-order returns graceful 503.
+### Wallet ledger credit types + withdrawability
+- Every ledger entry now carries `txn_id`, `source` (topup|refund|referral|promotional|admin_credit|cashback|milestone|order_payment|withdrawal), `withdrawable`, `status`, `payment_ref`. `withdrawable_balance` = min(total, Σ withdrawable-source credits − active withdrawal holds), driven by `settings.withdrawable_sources` (default topup+refund). Admin adjust tags admin_credit; referral=referral (not withdrawable by default).
+### Wallet Withdrawal
+- `POST /api/me/wallet/withdraw` (UPI/bank) validates min + eligible balance, places a ledger hold (source=withdrawal, status=pending). Statuses: pending→approved→processing→completed / rejected / failed. Admin: `GET /api/admin/withdrawals`, `PUT /api/admin/withdrawals/{id}/status`. Reject/fail CANCELS the hold entry (status=cancelled, excluded from balance & held) → amount + withdrawability restored (verified). Complete finalizes hold.
+- Admin `GET /api/admin/wallet/overview/balances` (per-customer balances + total liability). `AdminWalletManagement.js`.
+### Cashback + Milestone rewards
+- On order → delivered, `_grant_rewards` credits cashback (settings cashback_percent, capped cashback_max; idempotent per order_id) + milestone rewards (settings milestone_rewards {5,10}; deduped by note). Verified ₹19.18 cashback.
+### Analytics additions
+- `GET /api/admin/analytics/wallet` (liability, credited/debited, by_source, topups, withdrawals_by_status) and `/api/admin/analytics/referrals` (top referrers, reward paid).
+### Admin navigation — 8 top-level sections, each sub-item opens a real working page
+- Catalog & Inventory (7), Sales & Analytics (10 sub-items → `/admin/analytics?tab=` incl referrals/wallet/reports), Coupons & Discounts (7: Campaigns, Create[dialog], Bulk[dialog], Product/Order, Delivery, ASAP[filtered], Personalized→campaigns), Customer Info (Customers, 360, Behaviour, Abandoned Carts, Wallet Management), Delivery Info & Stats (Locations, PIN Codes, Delivery Charges/Slots/ASAP via `?section=`, PIN-wise Stats), Personal Settings (Business Settings, Payments). AdminCoupons reads `?action/?type/?scope`; AdminAnalytics reads `?tab`; AdminDelivery reads `?section`.
+- New settings: cashback %/max/enabled, milestone rewards, withdrawals_enabled, min_withdrawal, withdrawable_sources chips (AdminSettings.js).
+### Backlog (P2, from iteration_6 review — non-blocking)
+- Make wallet_balance/withdrawable atomic ($inc on a wallet doc) — currently O(n) full-ledger scan per call (race-prone); admin_wallet_balances is O(N*M) → use $group aggregation.
+- Milestone dedup by order_id (not note); wrap request_withdrawal ObjectId in try/except; persist DEFAULTS on first settings read.
+- Frontend testid aliases (submit-withdraw-btn vs withdraw-submit) — cosmetic.
+- Mobile app still a scaffold — new features NOT ported.
+

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
+from bson import ObjectId
 from fastapi import APIRouter, Depends
 
 from core.db import db
@@ -197,6 +198,68 @@ async def analytics_payments(admin: dict = Depends(require_admin)):
     for r in methods.values():
         r["revenue"] = round(r["revenue"], 2)
     return {"by_method": list(methods.values())}
+
+
+@router.get("/admin/analytics/referrals")
+async def analytics_referrals(admin: dict = Depends(require_admin)):
+    refs = await db.referrals.find({}, {"_id": 0}).to_list(20000)
+    total_reward = sum(r.get("reward", 0) for r in refs)
+    by_referrer = {}
+    for r in refs:
+        row = by_referrer.setdefault(r["referrer_id"], {"referrer_id": r["referrer_id"], "count": 0, "reward": 0})
+        row["count"] += 1
+        row["reward"] += r.get("reward", 0)
+    for uid, row in by_referrer.items():
+        try:
+            u = await db.users.find_one({"_id": ObjectId(uid)}, {"name": 1})
+            row["name"] = (u or {}).get("name", "—")
+        except Exception:
+            row["name"] = "—"
+    top = sorted(by_referrer.values(), key=lambda x: x["count"], reverse=True)[:20]
+    with_codes = await db.users.count_documents({"referral_code": {"$exists": True, "$ne": None}})
+    return {"total_referrals": len(refs), "total_reward_paid": round(total_reward, 2),
+            "customers_with_codes": with_codes, "top_referrers": top}
+
+
+@router.get("/admin/analytics/wallet")
+async def analytics_wallet(admin: dict = Depends(require_admin)):
+    by_source = {}
+    total_credit = 0.0
+    total_debit = 0.0
+    total_liability = 0.0
+    async for l in db.wallet_ledger.find({}, {"amount": 1, "source": 1, "_id": 0}):
+        amt = l.get("amount", 0)
+        src = l.get("source", "other")
+        total_liability += amt
+        if amt >= 0:
+            total_credit += amt
+        else:
+            total_debit += amt
+        row = by_source.setdefault(src, {"source": src, "credited": 0, "debited": 0})
+        if amt >= 0:
+            row["credited"] += amt
+        else:
+            row["debited"] += abs(amt)
+    for r in by_source.values():
+        r["credited"] = round(r["credited"], 2); r["debited"] = round(r["debited"], 2)
+
+    topups = await db.wallet_topups.find({"status": "paid"}, {"amount": 1, "_id": 0}).to_list(20000)
+    wd_status = {}
+    async for w in db.withdrawals.find({}, {"status": 1, "amount": 1, "_id": 0}):
+        row = wd_status.setdefault(w["status"], {"status": w["status"], "count": 0, "amount": 0})
+        row["count"] += 1
+        row["amount"] += w.get("amount", 0)
+    for r in wd_status.values():
+        r["amount"] = round(r["amount"], 2)
+
+    return {
+        "total_liability": round(total_liability, 2),
+        "total_credited": round(total_credit, 2),
+        "total_debited": round(abs(total_debit), 2),
+        "by_source": sorted(by_source.values(), key=lambda x: x["credited"], reverse=True),
+        "topups_count": len(topups), "topups_value": round(sum(t["amount"] for t in topups), 2),
+        "withdrawals_by_status": list(wd_status.values()),
+    }
 
 
 # ---------------- PIN-wise delivery stats ----------------

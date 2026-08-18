@@ -30,6 +30,30 @@ def customer_status(status: str) -> str:
     return CUSTOMER_STATUS_MAP.get(status, status)
 
 
+async def _grant_rewards(order: dict):
+    """Grant wallet cashback + milestone rewards when an order is delivered (idempotent)."""
+    from routers.settings import load_settings
+    from routers.wallet import add_wallet_entry
+    s = await load_settings()
+    uid = order["user_id"]
+    if s.get("cashback_enabled") and not await db.wallet_ledger.find_one({"order_id": order["id"], "source": "cashback"}):
+        cb = round(order.get("final_amount", 0) * s.get("cashback_percent", 0) / 100, 2)
+        if s.get("cashback_max"):
+            cb = min(cb, s["cashback_max"])
+        if cb > 0:
+            await add_wallet_entry(uid, cb, "Order cashback", order_id=order["id"], source="cashback",
+                                   notes=f"Cashback for order {order.get('order_number')}")
+    if s.get("milestone_enabled"):
+        delivered_count = await db.orders.count_documents({"user_id": uid, "status": "delivered"})
+        rewards = s.get("milestone_rewards", {}) or {}
+        key = str(delivered_count)
+        note = f"Milestone #{key} reward"
+        if key in rewards and not await db.wallet_ledger.find_one({"user_id": uid, "source": "milestone", "notes": note}):
+            amt = rewards[key]
+            if amt and amt > 0:
+                await add_wallet_entry(uid, amt, "Milestone reward", source="milestone", notes=note)
+
+
 async def gen_order_number() -> str:
     count = await db.orders.count_documents({})
     return f"FG{datetime.now().strftime('%y%m')}{count + 1:05d}"
@@ -336,6 +360,8 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, admin: 
     await db.orders.update_one(
         {"id": order_id},
         {"$set": update, "$push": {"status_history": {"status": payload.status, "at": now_iso()}}})
+    if payload.status == "delivered" and order["status"] != "delivered":
+        await _grant_rewards(await db.orders.find_one({"id": order_id}, {"_id": 0}))
     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
     try:
         await notify_order(updated, payload.status)

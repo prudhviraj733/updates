@@ -294,6 +294,34 @@ class BusinessSettingsInput(BaseModel):
     currency: Optional[str] = None
     cod_enabled: Optional[bool] = None
     online_payment_enabled: Optional[bool] = None
+    # Wallet rewards
+    cashback_enabled: Optional[bool] = None
+    cashback_percent: Optional[float] = None
+    cashback_max: Optional[float] = None
+    milestone_enabled: Optional[bool] = None
+    milestone_rewards: Optional[dict] = None          # {"5": 100, "10": 250}
+    # Wallet withdrawals
+    withdrawals_enabled: Optional[bool] = None
+    min_withdrawal: Optional[float] = None
+    withdrawable_sources: Optional[List[str]] = None   # e.g. ["topup", "refund"]
+
+
+class WalletTopupInput(BaseModel):
+    amount: float
+
+
+class WalletWithdrawInput(BaseModel):
+    amount: float
+    method: str = "upi"                # upi | bank
+    upi_id: Optional[str] = None
+    account_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc: Optional[str] = None
+
+
+class WithdrawalStatusInput(BaseModel):
+    status: str                        # approved | processing | completed | rejected | failed
+    admin_note: Optional[str] = ""
 
 
 # ---------- Combo Banner ----------
