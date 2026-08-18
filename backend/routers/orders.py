@@ -36,13 +36,23 @@ async def _grant_rewards(order: dict):
     from routers.wallet import add_wallet_entry
     s = await load_settings()
     uid = order["user_id"]
+    delivered_count = await db.orders.count_documents({"user_id": uid, "status": "delivered"})
     if s.get("cashback_enabled") and not await db.wallet_ledger.find_one({"order_id": order["id"], "source": "cashback"}):
-        cb = round(order.get("final_amount", 0) * s.get("cashback_percent", 0) / 100, 2)
+        # loyalty-tier cashback rate (falls back to flat cashback_percent)
+        percent = s.get("cashback_percent", 0)
+        tier_name = None
+        if s.get("loyalty_enabled"):
+            from routers.settings import loyalty_tier_for
+            tier, _ = loyalty_tier_for(delivered_count, s)
+            if tier:
+                percent = tier.get("cashback_percent", percent)
+                tier_name = tier.get("name")
+        cb = round(order.get("final_amount", 0) * percent / 100, 2)
         if s.get("cashback_max"):
             cb = min(cb, s["cashback_max"])
         if cb > 0:
-            await add_wallet_entry(uid, cb, "Order cashback", order_id=order["id"], source="cashback",
-                                   notes=f"Cashback for order {order.get('order_number')}")
+            note = f"Cashback for order {order.get('order_number')}" + (f" ({tier_name} tier {percent}%)" if tier_name else "")
+            await add_wallet_entry(uid, cb, "Order cashback", order_id=order["id"], source="cashback", notes=note)
     if s.get("milestone_enabled"):
         delivered_count = await db.orders.count_documents({"user_id": uid, "status": "delivered"})
         rewards = s.get("milestone_rewards", {}) or {}

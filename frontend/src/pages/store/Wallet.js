@@ -80,6 +80,13 @@ export default function Wallet() {
         <div className="flex items-center gap-2 text-sm text-white/70"><WalletIcon className="h-4 w-4" />Available balance</div>
         <p className="mt-2 text-4xl font-extrabold" data-testid="wallet-balance">{inr(data.balance)}</p>
         <p className="mt-1 text-xs text-white/60">Withdrawable: {inr(data.withdrawable_balance)} · Use balance at checkout to pay.</p>
+        {data.loyalty?.tier && (
+          <div className="mt-3 rounded-2xl bg-white/10 p-3 text-xs" data-testid="loyalty-tier">
+            <span className="font-semibold text-white">{data.loyalty.tier} tier</span>
+            <span className="text-white/70"> · {data.loyalty.cashback_percent}% cashback on every order</span>
+            {data.loyalty.next_tier && <p className="mt-0.5 text-white/60">{data.loyalty.orders_to_next} more order{data.loyalty.orders_to_next > 1 ? "s" : ""} to reach {data.loyalty.next_tier}</p>}
+          </div>
+        )}
         <div className="mt-5 flex gap-2">
           <Button className="rounded-full bg-white text-forest hover:bg-white/90" onClick={() => setAddOpen(true)} data-testid="add-money-btn"><Plus className="mr-1 h-4 w-4" />Add Money</Button>
           {data.withdrawals_enabled && (

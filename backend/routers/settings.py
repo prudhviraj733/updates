@@ -21,7 +21,25 @@ DEFAULTS = {
     "withdrawals_enabled": True,
     "min_withdrawal": 100.0,
     "withdrawable_sources": ["topup", "refund"],
+    "loyalty_enabled": True,
+    "loyalty_tiers": [
+        {"name": "Bronze", "min_orders": 0, "cashback_percent": 2},
+        {"name": "Silver", "min_orders": 5, "cashback_percent": 3},
+        {"name": "Gold", "min_orders": 15, "cashback_percent": 5},
+    ],
 }
+
+
+def loyalty_tier_for(order_count: int, settings: dict):
+    """Return (current_tier, next_tier) for a delivered-order count."""
+    tiers = sorted(settings.get("loyalty_tiers", []) or [], key=lambda t: t.get("min_orders", 0))
+    current, nxt = (tiers[0] if tiers else None), None
+    for t in tiers:
+        if order_count >= t.get("min_orders", 0):
+            current = t
+        elif nxt is None:
+            nxt = t
+    return current, nxt
 
 
 async def load_settings() -> dict:

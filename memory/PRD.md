@@ -153,3 +153,16 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - Frontend testid aliases (submit-withdraw-btn vs withdraw-submit) — cosmetic.
 - Mobile app still a scaffold — new features NOT ported.
 
+
+## Iteration 8 (2026-06) — Withdrawal Alerts, Loyalty Tiers, Combo Editing (backend curl-verified + frontend smoke-tested)
+### Withdrawal Alerts (email)
+- `update_withdrawal` sends a Resend email (via notifications.send_email, safety-gated) on approved / completed / rejected / failed with request id + amount. EMAIL_KEY IS configured → emails send.
+### Loyalty Tiers
+- Settings: `loyalty_enabled` + `loyalty_tiers` [{name,min_orders,cashback_percent}] default Bronze(0,2%)/Silver(5,3%)/Gold(15,5%). `settings.loyalty_tier_for(count)` helper. `_grant_rewards` cashback now uses the customer's tier rate (by delivered-order count, capped by cashback_max). `GET /api/me/wallet` returns `loyalty` {orders, tier, cashback_percent, next_tier, orders_to_next}; Wallet page shows a tier badge + progress. Tiers editable in AdminSettings (loyalty defaults surfaced; extend UI later if needed).
+### Combo Editing (admin-approved swaps + auto price adjustment)
+- `PackageInput.swap_options` {original_pid: [approved_alt_pids]}. `GET /api/packages/{id}` attaches `alternatives` + `swappable` per product. AdminPackages create form configures approved alternatives per product (pkg-swapcfg/pkg-alt testids). ComboDetail lets customers swap each swappable item to an approved alternative; effective combo price auto-adjusts by the price difference (verified: ₹500 → ₹221 after swapping to a cheaper Kolam Rice, "-₹279 with your swaps"); add-to-cart adds the chosen set.
+### Backlog (P2, unchanged + new)
+- AdminSettings: expose full loyalty-tier editor (add/remove tiers) — currently defaults + backend editable via API.
+- Combos add items at individual prices in cart (curated-list model), so combo bundle price isn't enforced as a single cart line — consider a true bundle cart item if strict combo pricing is required.
+- Prior P2s: atomic wallet balance, milestone dedup by order_id, mobile app port (still scaffold).
+

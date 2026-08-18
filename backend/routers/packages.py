@@ -20,17 +20,30 @@ async def get_package(package_id: str):
     pkg = await db.packages.find_one({"id": package_id, "is_active": True}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Combo not found")
+    swaps = pkg.get("swap_options", {}) or {}
+
+    def summarize(p):
+        return {"id": p["id"], "name": p["name"], "pack_size": p.get("pack_size", ""),
+                "images": p.get("images", []), "selling_price": p.get("selling_price", 0),
+                "mrp": p.get("mrp", 0)}
+
     products = []
     total = 0.0
     for pid in pkg.get("product_ids", []):
         p = await db.products.find_one({"id": pid, "is_active": True}, {"_id": 0})
-        if p:
-            if p.get("mrp", 0) > p.get("selling_price", 0):
-                p["discount_percent"] = round((p["mrp"] - p["selling_price"]) / p["mrp"] * 100)
-            else:
-                p["discount_percent"] = 0
-            products.append(p)
-            total += p.get("selling_price", 0)
+        if not p:
+            continue
+        p["discount_percent"] = round((p["mrp"] - p["selling_price"]) / p["mrp"] * 100) if p.get("mrp", 0) > p.get("selling_price", 0) else 0
+        # attach admin-approved swap alternatives
+        alts = []
+        for alt_id in swaps.get(pid, []):
+            ap = await db.products.find_one({"id": alt_id, "is_active": True}, {"_id": 0})
+            if ap:
+                alts.append(summarize(ap))
+        p["alternatives"] = alts
+        p["swappable"] = len(alts) > 0
+        products.append(p)
+        total += p.get("selling_price", 0)
     pkg["products"] = products
     pkg["items_value"] = round(total, 2)
     pkg["savings"] = round(max(0, total - pkg.get("price", 0)), 2)

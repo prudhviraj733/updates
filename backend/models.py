@@ -260,6 +260,7 @@ class PackageInput(BaseModel):
     image_url: Optional[str] = ""
     package_type: str = "bundle"  # bundle | monthly | promotional
     product_ids: List[str] = []
+    swap_options: dict = {}       # {original_product_id: [approved_alternative_product_ids]}
     price: float = 0
     is_active: bool = True
     location_ids: List[str] = []
@@ -304,6 +305,9 @@ class BusinessSettingsInput(BaseModel):
     withdrawals_enabled: Optional[bool] = None
     min_withdrawal: Optional[float] = None
     withdrawable_sources: Optional[List[str]] = None   # e.g. ["topup", "refund"]
+    # Loyalty tiers
+    loyalty_enabled: Optional[bool] = None
+    loyalty_tiers: Optional[List[dict]] = None         # [{name, min_orders, cashback_percent}]
 
 
 class WalletTopupInput(BaseModel):

@@ -82,11 +82,24 @@ async def my_wallet(user: dict = Depends(get_current_user)):
     settings = await load_settings()
     ledger = await db.wallet_ledger.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     withdrawals = await db.withdrawals.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    loyalty = None
+    if settings.get("loyalty_enabled"):
+        from routers.settings import loyalty_tier_for
+        delivered = await db.orders.count_documents({"user_id": user["id"], "status": "delivered"})
+        current, nxt = loyalty_tier_for(delivered, settings)
+        loyalty = {
+            "orders": delivered,
+            "tier": current.get("name") if current else None,
+            "cashback_percent": current.get("cashback_percent") if current else None,
+            "next_tier": nxt.get("name") if nxt else None,
+            "orders_to_next": (nxt.get("min_orders") - delivered) if nxt else None,
+        }
     return {
         "balance": await wallet_balance(user["id"]),
         "withdrawable_balance": await withdrawable_balance(user["id"], settings),
         "min_withdrawal": settings.get("min_withdrawal", 0),
         "withdrawals_enabled": settings.get("withdrawals_enabled", False),
+        "loyalty": loyalty,
         "ledger": ledger,
         "withdrawals": withdrawals,
     }
@@ -247,4 +260,40 @@ async def update_withdrawal(withdrawal_id: str, payload: WithdrawalStatusInput, 
     await db.withdrawals.update_one({"id": withdrawal_id},
                                     {"$set": {"status": payload.status, "admin_note": payload.admin_note,
                                               "updated_at": now_iso()}})
-    return await db.withdrawals.find_one({"id": withdrawal_id}, {"_id": 0})
+    updated = await db.withdrawals.find_one({"id": withdrawal_id}, {"_id": 0})
+    if payload.status in ("approved", "completed", "rejected", "failed"):
+        try:
+            await _notify_withdrawal(updated, payload.status)
+        except Exception:
+            pass
+    return updated
+
+
+async def _notify_withdrawal(wd: dict, status: str):
+    from html import escape
+    from routers.notifications import send_email, EMAIL_FROM_NAME
+    try:
+        u = await db.users.find_one({"_id": ObjectId(wd["user_id"])}, {"email": 1, "name": 1})
+    except Exception:
+        u = None
+    email = (u or {}).get("email")
+    if not email:
+        return
+    titles = {"approved": "Withdrawal approved", "completed": "Withdrawal completed",
+              "rejected": "Withdrawal rejected", "failed": "Withdrawal failed"}
+    lines = {
+        "approved": f"Your withdrawal request {wd['request_id']} for &#8377;{wd['amount']} has been approved and is being processed.",
+        "completed": f"&#8377;{wd['amount']} has been sent to your {wd['method'].upper()} account. Request {wd['request_id']} is now complete.",
+        "rejected": f"Your withdrawal request {wd['request_id']} was rejected and &#8377;{wd['amount']} has been returned to your wallet.",
+        "failed": f"Your withdrawal request {wd['request_id']} failed and &#8377;{wd['amount']} has been returned to your wallet.",
+    }
+    title = titles.get(status, "Withdrawal update")
+    line = lines.get(status, "")
+    html = (
+        f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#111">'
+        f'<h2 style="color:#1B4332;margin:0 0 8px">{escape(title)}</h2>'
+        f'<p>Hi {escape((u or {}).get("name", "there"))},</p><p>{line}</p>'
+        f'<p style="font-size:12px;color:#888;margin-top:24px">Sent by {escape(EMAIL_FROM_NAME)}. '
+        f'We never ask for your password or card details by email.</p></td></tr></table>'
+    )
+    await send_email(to=email, subject=f"{EMAIL_FROM_NAME}: {title}", html=html)
