@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 11 (combo edit/swap/inventory) tested end-to-end. Backend: 7/7 pytest cases pass (GET combo config, add-combo single line, update-combo swap+qty preserves line, qty clamp, disallowed swap 400, remove combo, COD/ASAP order with combo). Frontend Playwright verified: base price + You Save show correctly, +/- stepper bounded (dec disabled at min=1, inc disabled at max=3), fixed-qty item has no stepper, price updates live when qty changes (₹500→₹1,898 at qty 3) and when swapping to Kolam Rice (₹1,061), Swap dialog shows original + admin-approved alternatives with +/-₹ diff, Add Combo to Cart creates exactly ONE bundle line in the drawer with combo name/effective price/Save badge/item list, Edit action navigates to /combo/:id?line=<id> with prefilled qty and 'Update Combo' button label, Update preserves the same line_id (no duplicate), Remove clears the combo line.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Combo update redirect", "issue": "After 'Update Combo' the code calls navigate('/checkout') but the app redirects to /offers (checkout likely bounces due to missing/invalid address selection or auth session). Update itself works and cart still shows single line, so functional impact is low but the UX intent is broken.", "affected_selectors": ["combo-add-all"]}
+    ],
+    "design_issues": [
+      {"screen": "Swap dialog", "issues": ["Radix DialogContent missing aria-describedby / DialogDescription (a11y warning in console)"]},
+      {"screen": "Combo hero", "issues": ["React warning: empty string passed to <img src> when combo.image_url is missing; render null instead of empty src"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_combo_edit_iter11.py",
+    "/app/test_reports/pytest/iter11_combo.xml"
+  ],
+  "action_items": [
+    "Investigate why /checkout redirects to /offers after combo update (address selection / cart location mismatch).",
+    "Add DialogDescription (or aria-describedby) to the Swap dialog to fix a11y warning.",
+    "Guard <img src={combo.image_url}> to avoid empty-string src warning."
+  ],
+  "critical_code_review_comments": [
+    "packages.price_and_validate_combo clamps qty silently to min/max; frontend never sends >max because stepper is bounded, but a malicious client could send any qty and it will just be clamped (accepted behaviour, but consider 400 for out-of-range to help debug).",
+    "cart.add_combo does not deduplicate identical combos (same combo_id + same selections) into one line. Requirement states 'edited combo stays as ONE bundle line' — currently EACH add creates a new line. If PM wants merge-on-identical, add logic.",
+    "build_cart_response silently 'continue's on inactive combo package or pricing exception — could hide errors from users. Consider surfacing a warning line."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_combo_edit_iter11.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100% (functional); minor UX redirect issue"},
+  "test_credentials": "customer@test.com / Test@12345 (used); admin not required for this iteration",
+  "seed_data_creation": "None; used existing Swap Test Combo package and Banjara Hills location.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Combo requirement #5 flows are stable. If regressions appear, re-run pytest backend/tests/test_combo_edit_iter11.py. Frontend cart-button opens drawer with data-testid=cart-drawer; combo bundle lines are cart-combo-<line_id>."
+}

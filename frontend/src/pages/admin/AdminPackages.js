@@ -10,7 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const EMPTY = { name: "", description: "", image_url: "", package_type: "bundle", product_ids: [], swap_options: {}, price: 0, is_active: true, location_ids: [] };
+const EMPTY = { name: "", description: "", image_url: "", package_type: "bundle", product_ids: [], swap_options: {}, item_config: {}, price: 0, is_active: true, location_ids: [] };
+
+const DEFAULT_CFG = { qty_editable: false, swap_allowed: true, min_qty: 1, max_qty: 1, default_qty: 1 };
 
 export default function AdminPackages() {
   const [packages, setPackages] = useState([]);
@@ -24,17 +26,20 @@ export default function AdminPackages() {
   useEffect(() => { load(); api.get("/admin/products").then(({ data }) => setProducts(data)); api.get("/admin/locations").then(({ data }) => setLocations(data)); }, []);
 
   const save = async () => {
-    try { await api.post("/admin/packages", { ...form, price: Number(form.price), location_ids: locations.map((l) => l.id) }); toast.success("Saved"); setOpen(false); load(); }
+    try { await api.post("/admin/packages", { ...form, price: Number(form.price), item_config: form.item_config, location_ids: locations.map((l) => l.id) }); toast.success("Saved"); setOpen(false); load(); }
     catch (e) { toast.error("Error"); }
   };
   const del = async (id) => { await api.delete(`/admin/packages/${id}`); load(); };
   const toggleProduct = (id) => setForm((f) => {
     const has = f.product_ids.includes(id);
     const swap_options = { ...f.swap_options };
-    if (has) delete swap_options[id];
-    return { ...f, product_ids: has ? f.product_ids.filter((x) => x !== id) : [...f.product_ids, id], swap_options };
+    const item_config = { ...f.item_config };
+    if (has) { delete swap_options[id]; delete item_config[id]; }
+    else { item_config[id] = { ...DEFAULT_CFG }; }
+    return { ...f, product_ids: has ? f.product_ids.filter((x) => x !== id) : [...f.product_ids, id], swap_options, item_config };
   });
   const pName = (id) => products.find((p) => p.id === id)?.name || id;
+  const setCfg = (id, patch) => setForm((f) => ({ ...f, item_config: { ...f.item_config, [id]: { ...DEFAULT_CFG, ...f.item_config[id], ...patch } } }));
   const toggleAlt = (origId, altId) => setForm((f) => {
     const cur = f.swap_options[origId] || [];
     const next = cur.includes(altId) ? cur.filter((x) => x !== altId) : [...cur, altId];
@@ -86,11 +91,20 @@ export default function AdminPackages() {
                       )}
                     </div>
                     {swapFor === p.id && (
-                      <div className="ml-6 mt-1 max-h-32 space-y-1 overflow-y-auto rounded bg-slate-50 p-2">
-                        <p className="text-xs text-slate-400">Approved alternatives customers may swap to:</p>
-                        {products.filter((a) => a.id !== p.id).map((a) => (
-                          <label key={a.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={(form.swap_options[p.id] || []).includes(a.id)} onChange={() => toggleAlt(p.id, a.id)} data-testid={`pkg-alt-${p.id}-${a.id}`} />{a.name}</label>
-                        ))}
+                      <div className="ml-6 mt-1 space-y-2 rounded bg-slate-50 p-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="col-span-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={!!form.item_config[p.id]?.qty_editable} onChange={(e) => setCfg(p.id, { qty_editable: e.target.checked })} data-testid={`pkg-qtyedit-${p.id}`} />Allow customer to change quantity</label>
+                          <label className="text-xs">Min qty<input type="number" min="1" className="mt-0.5 w-full rounded border p-1" value={form.item_config[p.id]?.min_qty ?? 1} onChange={(e) => setCfg(p.id, { min_qty: Number(e.target.value) })} data-testid={`pkg-minqty-${p.id}`} /></label>
+                          <label className="text-xs">Max qty<input type="number" min="1" className="mt-0.5 w-full rounded border p-1" value={form.item_config[p.id]?.max_qty ?? 1} onChange={(e) => setCfg(p.id, { max_qty: Number(e.target.value) })} data-testid={`pkg-maxqty-${p.id}`} /></label>
+                          <label className="text-xs">Default qty<input type="number" min="1" className="mt-0.5 w-full rounded border p-1" value={form.item_config[p.id]?.default_qty ?? 1} onChange={(e) => setCfg(p.id, { default_qty: Number(e.target.value) })} data-testid={`pkg-defqty-${p.id}`} /></label>
+                          <label className="col-span-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={form.item_config[p.id]?.swap_allowed !== false} onChange={(e) => setCfg(p.id, { swap_allowed: e.target.checked })} data-testid={`pkg-swapallow-${p.id}`} />Allow swapping this item</label>
+                        </div>
+                        <div className="max-h-32 space-y-1 overflow-y-auto border-t pt-2">
+                          <p className="text-xs text-slate-400">Approved alternatives customers may swap to:</p>
+                          {products.filter((a) => a.id !== p.id).map((a) => (
+                            <label key={a.id} className="flex items-center gap-2 text-xs"><input type="checkbox" disabled={form.item_config[p.id]?.swap_allowed === false} checked={(form.swap_options[p.id] || []).includes(a.id)} onChange={() => toggleAlt(p.id, a.id)} data-testid={`pkg-alt-${p.id}-${a.id}`} />{a.name}</label>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

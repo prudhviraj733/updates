@@ -9,7 +9,7 @@ export function StoreProvider({ children }) {
   const { user } = useAuth();
   const [locations, setLocations] = useState([]);
   const [location, setLocationState] = useState(null);
-  const [cart, setCart] = useState({ items: [], subtotal: 0, count: 0 });
+  const [cart, setCart] = useState({ items: [], combos: [], subtotal: 0, count: 0 });
   const [wishlist, setWishlist] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -36,7 +36,7 @@ export function StoreProvider({ children }) {
 
   const refreshCart = useCallback(async () => {
     if (!user || user === false || !location) {
-      setCart({ items: [], subtotal: 0, count: 0 });
+      setCart({ items: [], combos: [], subtotal: 0, count: 0 });
       return;
     }
     try {
@@ -44,6 +44,34 @@ export function StoreProvider({ children }) {
       setCart(data);
     } catch {}
   }, [user, location]);
+
+  const addCombo = async (comboId, selections) => {
+    if (!requireAuth()) return false;
+    try {
+      const { data } = await api.post("/cart/combo", { location_id: location.id, combo_id: comboId, selections });
+      setCart(data);
+      return true;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not add combo");
+      return false;
+    }
+  };
+
+  const updateCombo = async (lineId, selections) => {
+    try {
+      const { data } = await api.put(`/cart/combo/${lineId}`, { location_id: location.id, selections });
+      setCart(data);
+      return true;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not update combo");
+      return false;
+    }
+  };
+
+  const removeCombo = async (lineId) => {
+    const { data } = await api.delete(`/cart/combo/${lineId}?location_id=${location.id}`);
+    setCart(data);
+  };
 
   const refreshWishlist = useCallback(async () => {
     if (!user || user === false) {
@@ -126,6 +154,7 @@ export function StoreProvider({ children }) {
       value={{
         locations, location, setLocation,
         cart, refreshCart, addToCart, updateQty, removeItem, clearCart,
+        addCombo, updateCombo, removeCombo,
         wishlist, toggleWishlist, refreshWishlist,
         cartOpen, setCartOpen,
         locationModalOpen, setLocationModalOpen,

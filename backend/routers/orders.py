@@ -8,6 +8,7 @@ from models import OrderInput, OrderStatusUpdate, OrderTrackingInput, gen_id, no
 from routers.delivery import get_settings, compute_slots
 from routers.coupons import _calc_discount, _calc_delivery_discount
 from routers.notifications import notify_order
+from routers.packages import price_and_validate_combo
 
 router = APIRouter()
 
@@ -111,16 +112,47 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
 
     settings = await get_settings(payload.location_id)
 
-    # Build order items snapshot
+    # Build order items snapshot (individual products + combo bundles)
     items = []
-    subtotal = 0.0
+    combos = []
+    products_subtotal = 0.0
+    combos_chosen_value = 0.0
+    combos_effective = 0.0
+    combo_savings_total = 0.0
     total_mrp = 0.0
     for ci in cart["items"]:
+        if ci.get("type") == "combo":
+            pkg = await db.packages.find_one({"id": ci["combo_id"], "is_active": True}, {"_id": 0})
+            if not pkg:
+                raise HTTPException(status_code=400, detail="A combo in your cart is no longer available")
+            priced = await price_and_validate_combo(pkg, ci.get("selections", {}), payload.location_id, validate_stock=True)
+            for li in priced["items"]:
+                line = li["unit_price"] * li["quantity"]
+                total_mrp += li["mrp"] * li["quantity"]
+                items.append({
+                    "product_id": li["product_id"], "name": li["name"], "image": li["image"],
+                    "pack_size": li["pack_size"], "unit_price": li["unit_price"], "mrp": li["mrp"],
+                    "cost_price": li["cost_price"], "category_id": li["category_id"],
+                    "subcategory_id": li["subcategory_id"], "brand_id": li["brand_id"],
+                    "quantity": li["quantity"], "line_total": round(line, 2),
+                    "combo_id": pkg["id"], "combo_name": pkg["name"],
+                })
+            combos_chosen_value += priced["chosen_value"]
+            combos_effective += priced["effective_price"]
+            combo_savings_total += priced["savings"]
+            combos.append({
+                "combo_id": pkg["id"], "name": pkg["name"], "image": priced["image"],
+                "base_price": priced["base_price"], "chosen_value": priced["chosen_value"],
+                "savings": priced["savings"], "effective_price": priced["effective_price"],
+                "items": [{"product_id": li["product_id"], "name": li["name"],
+                           "quantity": li["quantity"], "unit_price": li["unit_price"]} for li in priced["items"]],
+            })
+            continue
         product = await db.products.find_one({"id": ci["product_id"]}, {"_id": 0})
         if not product or not product.get("is_active"):
             raise HTTPException(status_code=400, detail="A product in your cart is unavailable")
         line = product["selling_price"] * ci["quantity"]
-        subtotal += line
+        products_subtotal += line
         total_mrp += product.get("mrp", product["selling_price"]) * ci["quantity"]
         items.append({
             "product_id": product["id"], "name": product["name"],
@@ -133,6 +165,10 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
             "brand_id": product.get("brand_id"),
             "quantity": ci["quantity"], "line_total": round(line, 2),
         })
+
+    subtotal = round(products_subtotal + combos_effective, 2)
+    product_discount = round(total_mrp - (products_subtotal + combos_chosen_value), 2)
+    combo_discount = round(combo_savings_total, 2)
 
     if subtotal < pin_min:
         raise HTTPException(status_code=400, detail=f"Minimum order value is ₹{pin_min}")
@@ -226,7 +262,9 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "address": address,
         "items": items,
         "subtotal": round(subtotal, 2),
-        "product_discount": round(total_mrp - subtotal, 2),
+        "product_discount": product_discount,
+        "combo_discount": combo_discount,
+        "combos": combos,
         "coupon_code": coupon_code,
         "coupon_discount": coupon_discount,
         "delivery_coupon_code": delivery_coupon_code,

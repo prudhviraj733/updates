@@ -191,6 +191,17 @@ class CartUpdateInput(BaseModel):
     quantity: int
 
 
+class ComboCartInput(BaseModel):
+    location_id: str
+    combo_id: str
+    selections: Dict[str, dict] = {}   # {original_pid: {"product_id": chosen_id, "quantity": q}}
+
+
+class ComboCartUpdateInput(BaseModel):
+    location_id: str
+    selections: Dict[str, dict] = {}
+
+
 # ---------- Coupon ----------
 class CouponInput(BaseModel):
     code: str
@@ -265,6 +276,7 @@ class PackageInput(BaseModel):
     package_type: str = "bundle"  # bundle | monthly | promotional
     product_ids: List[str] = []
     swap_options: dict = {}       # {original_product_id: [approved_alternative_product_ids]}
+    item_config: dict = {}        # {pid: {qty_editable, swap_allowed, min_qty, max_qty, default_qty}}
     price: float = 0
     is_active: bool = True
     location_ids: List[str] = []
