@@ -122,3 +122,12 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - Move RAZORPAY_FEE_PCT to settings; pincode update should re-validate location_id.
 - Customer-facing wallet/referral UI pages + order tracking display + PIN serviceability check at checkout (backend ready).
 - Mobile app: still a scaffold; new features NOT yet ported.
+
+
+## Iteration 6 (2026-06) — Customer-facing Wallet / Referral / PIN check / Live Tracking (tested frontend 6/6 PASS, iteration_5; backend curl-verified)
+- **Wallet** (`/wallet`, `Wallet.js`): balance card + full ledger (credits/refunds/order payments). Backend `GET /api/me/wallet`. Checkout "Use wallet balance" toggle (`OrderInput.use_wallet`) partially/fully pays; order create records an `order_payment` debit ledger entry and stores `wallet_used`. Verified: 1398+40+100−300 wallet = 1238; balance 300→0.
+- **Refer & Earn** (`/referral`, `Referral.js`): shareable code (lazy-generated), copy/native-share, apply a friend's code (`POST /api/referral/apply?code=`) crediting referrer ₹100 + referee ₹50; self/duplicate rejected. Clipboard/share wrapped in try/catch.
+- **PIN serviceability** (`LocationModal.js`): enter PIN → `GET /api/pincodes/check` → shows serviceable + parent location + min order + delivery fee + area discount, or "we don't deliver" message; "Shop this area" sets location.
+- **Live Order Tracking** (`Orders.js`): customer_status badges; order detail shows a 6-step journey timeline with timestamps (from status_history) and a "Live tracking" button linking to the admin-set Rapido/Maps tracking_url when out_for_delivery. Order summary now shows delivery-coupon + wallet lines.
+- Header account menu gained "My Wallet" + "Refer & Earn"; routes `/wallet` `/referral` (protected).
+- Backlog still open: customer-facing wallet UI error-retry; LocationModal aria-describedby; plus all P2 items from iteration 5 (N+1 batching, atomic wallet balance, mobile app port).

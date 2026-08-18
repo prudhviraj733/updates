@@ -40,6 +40,8 @@ export default function Checkout() {
   const [addrOpen, setAddrOpen] = useState(false);
   const [newAddr, setNewAddr] = useState(EMPTY_ADDR);
   const [placing, setPlacing] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [useWallet, setUseWallet] = useState(false);
 
   // Use Asia/Kolkata date so requested slots align with backend IST computation.
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -64,6 +66,7 @@ export default function Checkout() {
     });
     api.get("/payments/config").then(({ data }) => setPayConfig(data));
     api.get("/settings").then(({ data }) => setSettings(data));
+    api.get("/me/wallet").then(({ data }) => setWalletBalance(data.balance || 0)).catch(() => {});
   }, [location, today]);
 
   if (!location) return null;
@@ -83,7 +86,9 @@ export default function Checkout() {
   const productDiscount = productCoupon?.discount || 0;
   const deliveryDiscount = deliveryCoupon?.discount || 0;
   const extra = deliveryType === "asap" ? asapCharge : 0;
-  const total = Math.max(0, cart.subtotal - productDiscount + deliveryCharge + extra - deliveryDiscount);
+  const beforeWallet = Math.max(0, cart.subtotal - productDiscount + deliveryCharge + extra - deliveryDiscount);
+  const walletApplied = useWallet ? Math.min(walletBalance, beforeWallet) : 0;
+  const total = Math.max(0, beforeWallet - walletApplied);
 
   const applyCoupon = async () => {
     if (!coupon.trim()) return;
@@ -129,6 +134,7 @@ export default function Checkout() {
         payment_method: payment,
         coupon_code: productCoupon?.code || null,
         delivery_coupon_code: deliveryCoupon?.code || null,
+        use_wallet: useWallet,
       });
 
       if (payment === "razorpay") {
@@ -318,6 +324,12 @@ export default function Checkout() {
               <Button variant="outline" className="rounded-full" onClick={applyCoupon} data-testid="apply-coupon">Apply</Button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">You can stack 1 product coupon + 1 delivery coupon.</p>
+            {walletBalance > 0 && (
+              <label className="mt-3 flex cursor-pointer items-center justify-between rounded-xl border border-forest/30 bg-forest-light/40 px-3 py-2.5" data-testid="use-wallet-toggle">
+                <span className="flex items-center gap-2 text-sm font-medium"><Wallet className="h-4 w-4 text-forest" />Use wallet balance ({inr(walletBalance)})</span>
+                <input type="checkbox" checked={useWallet} onChange={(e) => setUseWallet(e.target.checked)} className="h-4 w-4 accent-[#2f6b3f]" data-testid="use-wallet-checkbox" />
+              </label>
+            )}
             <div className="mt-2 space-y-1">
               {productCoupon && (
                 <div className="flex items-center justify-between rounded-lg bg-forest-light px-3 py-1.5 text-sm" data-testid="applied-product-coupon">
@@ -339,6 +351,7 @@ export default function Checkout() {
               <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{inr(deliveryCharge)}</span></div>
               {deliveryType === "asap" && <div className="flex justify-between text-saffron"><span>Priority (ASAP)</span><span>+{inr(asapCharge)}</span></div>}
               {deliveryDiscount > 0 && <div className="flex justify-between text-blue-700"><span>Delivery coupon</span><span>-{inr(deliveryDiscount)}</span></div>}
+              {walletApplied > 0 && <div className="flex justify-between text-forest"><span>Wallet</span><span>-{inr(walletApplied)}</span></div>}
               <div className="flex justify-between pt-2 text-lg font-bold"><span>Total</span><span data-testid="order-total">{inr(total)}</span></div>
             </div>
 

@@ -274,6 +274,7 @@ class OrderInput(BaseModel):
     payment_method: str = "cod"  # cod | razorpay
     coupon_code: Optional[str] = None
     delivery_coupon_code: Optional[str] = None
+    use_wallet: bool = False
 
 
 class OrderStatusUpdate(BaseModel):

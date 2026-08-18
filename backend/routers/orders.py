@@ -155,6 +155,14 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
     final_amount = round(subtotal - coupon_discount + delivery_charge + asap_charge - delivery_discount, 2)
     final_amount = max(0.0, final_amount)
 
+    # Redeem wallet balance (partial or full)
+    wallet_used = 0.0
+    if payload.use_wallet:
+        from routers.wallet import wallet_balance
+        bal = await wallet_balance(user["id"])
+        wallet_used = round(min(bal, final_amount), 2)
+        final_amount = round(final_amount - wallet_used, 2)
+
     # Reserve inventory atomically
     await _reserve_inventory(items, payload.location_id)
 
@@ -175,6 +183,7 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "coupon_discount": coupon_discount,
         "delivery_coupon_code": delivery_coupon_code,
         "delivery_discount": delivery_discount,
+        "wallet_used": wallet_used,
         "campaign_id": campaign_id,
         "free_delivery_applied": free_delivery_applied,
         "delivery_charge": delivery_charge,
@@ -196,6 +205,10 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "updated_at": now_iso(),
     }
     await db.orders.insert_one(order)
+    if wallet_used > 0:
+        from routers.wallet import add_wallet_entry
+        await add_wallet_entry(user["id"], -wallet_used, "order_payment",
+                               order_id=order["id"], notes=f"Paid for order {order['order_number']}")
     if campaign_id and coupon_code:
         await db.personalized_coupons.update_one(
             {"code": coupon_code, "user_id": user["id"]},

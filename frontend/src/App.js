@@ -17,6 +17,8 @@ import Account from "@/pages/store/Account";
 import Wishlist from "@/pages/store/Wishlist";
 import Offers from "@/pages/store/Offers";
 import MyCoupons from "@/pages/store/MyCoupons";
+import Wallet from "@/pages/store/Wallet";
+import Referral from "@/pages/store/Referral";
 import ComboDetail from "@/pages/store/ComboDetail";
 import { Orders, OrderDetail } from "@/pages/store/Orders";
 
@@ -64,6 +66,8 @@ function App() {
                 <Route path="/wishlist" element={<Wishlist />} />
                 <Route path="/offers" element={<Offers />} />
                 <Route path="/my-coupons" element={<ProtectedRoute><MyCoupons /></ProtectedRoute>} />
+                <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
+                <Route path="/referral" element={<ProtectedRoute><Referral /></ProtectedRoute>} />
                 <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
                 <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
                 <Route path="/orders/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />

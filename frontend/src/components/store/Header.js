@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Search, ShoppingCart, MapPin, User, ChevronDown, Menu, Heart, Package, Ticket } from "lucide-react";
+import { Search, ShoppingCart, MapPin, User, ChevronDown, Menu, Heart, Package, Ticket, Wallet, Gift } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,8 @@ export function Header() {
                   <DropdownMenuItem onClick={() => navigate("/account")} data-testid="menu-account"><User className="mr-2 h-4 w-4" />My Account</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/orders")} data-testid="menu-orders"><Package className="mr-2 h-4 w-4" />My Orders</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/my-coupons")} data-testid="menu-coupons"><Ticket className="mr-2 h-4 w-4" />My Coupons</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/wallet")} data-testid="menu-wallet"><Wallet className="mr-2 h-4 w-4" />My Wallet</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/referral")} data-testid="menu-referral"><Gift className="mr-2 h-4 w-4" />Refer &amp; Earn</DropdownMenuItem>
                   {user.role === "admin" && (
                     <DropdownMenuItem onClick={() => navigate("/admin")} data-testid="menu-admin">Admin Dashboard</DropdownMenuItem>
                   )}

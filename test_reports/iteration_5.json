@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only testing of 4 new customer flows (Wallet, Refer&Earn, PIN serviceability, Pay-with-Wallet at checkout, Live order tracking) + light regression. All 4 primary flows are functionally working end-to-end against the live backend. Regression (SAVE10 coupon + home/products/cart) also green. One minor uncaught-promise issue found on the Referral page copy/share buttons.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Referral (Referral.js)", "issue": "navigator.clipboard.writeText() calls in copy() and share() are not wrapped in try/catch. In browsers where clipboard permission is denied (or navigator.share is unavailable AND clipboard is blocked), a NotAllowedError bubbles up as an uncaught promise rejection and shows the React dev error overlay. Toast still fires so end user notices little in prod build, but it should be handled gracefully.", "selector": "[data-testid=\"copy-referral\"], [data-testid=\"share-referral\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "LocationModal", "issues": ["DialogContent missing aria-describedby (console warning). Non-blocking accessibility warning."]}
+    ]
+  },
+  "test_results": {
+    "wallet_page": "PASS - /wallet loads, wallet-balance shows ₹500, 5 wallet-txn-* rows render (Goodwill +₹500, Order payment -₹300, Goodwill +₹300, Adjustment -₹10, Adjustment +₹10). Header account-menu -> menu-wallet navigates to /wallet.",
+    "referral_page": "PASS - /referral loads, referral-code shows TEST0PV3, copy-referral + share-referral buttons render (see minor bug above), referral-input + apply-referral reject invalid code with toast, self-code rejected. menu-referral from account-menu navigates to /referral.",
+    "pincode_check": "PASS - location-selector opens location-modal. 500034 -> pincode-serviceable shows 'Hyderabad - Central · Min order ₹199 · Delivery ₹40' + use-pincode-location button. 999999 -> pincode-not-serviceable message.",
+    "pay_with_wallet": "PASS - use-wallet-toggle shows on /checkout with balance ₹500. Toggling on reduces total from ₹739 -> ₹239 and adds 'Wallet -₹500' line. Placed ASAP+COD+wallet order FG260800016 successfully, redirected to /orders/{id} with 'Order placed successfully!' toast.",
+    "live_order_tracking": "PASS (partial) - /orders shows order-row-* rows with customer_status text ('Order Placed', 'Cancelled', 'Delivered'). Clicking a row opens /orders/{id} with order-tracking timeline containing all 6 track-step-0..5 (Order Placed, Order Confirmed, Being Prepared, Packed & Ready, Out for Delivery, Delivered), current step highlighted with timestamp. live-tracking-btn NOT present as no order is currently out_for_delivery with a tracking_url (this is expected/optional per request; would require admin action to seed).",
+    "regression": "PASS - / , /products, /cart all load without errors. SAVE10 coupon applies -₹69.9 discount, total updates to ₹669.1."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(LOW) Wrap navigator.clipboard.writeText() calls in Referral.js (copy() and share() functions) in try/catch to prevent uncaught NotAllowedError when clipboard permission is denied.",
+    "(OPTIONAL) Add aria-describedby (or a DialogDescription) to LocationModal DialogContent to remove Radix accessibility console warning."
+  ],
+  "critical_code_review_comments": [
+    "Referral.js copy()/share() do not handle rejected clipboard promises; will surface as red error overlay in dev.",
+    "Wallet.js does not have loading error branch — if /me/wallet fails, page stays on skeleton forever. Consider try/catch + retry.",
+    "All new pages correctly use data-testid attributes as required. Good separation. No MongoDB ObjectId leaks observed in API responses."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not tested per request)", "frontend": "100% (6/6 flows PASS, 1 minor bug)"},
+  "test_credentials": "customer@test.com / Test@12345 used. Wallet started at ₹500, consumed to ₹0 after placing wallet-paid order FG260800016.",
+  "seed_data_creation": "Placed 2 test orders during checkout testing: FG260800015 (initial state check) and FG260800016 (wallet-paid ASAP COD). Customer wallet is now depleted; re-credit to ₹500 needed if next testing agent wants to re-run the pay-with-wallet flow.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 new customer features work. To retest pay-with-wallet, re-credit customer@test.com wallet via admin adjust. To verify live-tracking-btn, use admin (prudhvirajm847@gmail.com / Admin@12345) to PUT /api/admin/orders/{FG260800016 id}/status=out_for_delivery and /tracking with a Rapido/Maps URL, then reload /orders/{id}."
+}
