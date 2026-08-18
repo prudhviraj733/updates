@@ -174,3 +174,20 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - **Search page rewrite** (Products.js): proper filter experience — Category (single, URL param), Subcategory + Brand (multi, checkboxes), Price slider, Discount chips (10/25/50), In-stock toggle, Clear all + active-filter chips + results count. Desktop left sidebar; mobile Filter button → Sheet drawer. Subcategory/brand facets are RELEVANT (derived from current result set only). ProductCard/pricing/discount/wishlist preserved.
 - Backlog (P2): persist discount_percent server-side or compute Mongo-side for large catalogs; add unique compound index (name-lower, parent_id) to block future duplicate category inserts (write-side).
 
+
+## Iteration 10 (2026-06) — 9-area consolidation (testing_agent VERIFIED 17/17 backend + frontend smoke, iteration_8)
+1. **PIN serviceability enforced end-to-end**: `PinCodeInput` gained `asap_enabled` + `free_delivery_threshold`; `/pincodes/check` returns them. `addresses.py` `_assert_serviceable` rejects unserviceable PINs on create/update and auto-sets location_id to the PIN's location. Order creation looks up the PIN, rejects unserviceable, uses PIN delivery_charge/min_order/free_threshold, and gates ASAP by `pin.asap_enabled`.
+2. **Category/Subcategory**: create rejects duplicates (case-insensitive name+parent); `/categories` & `/subcategories` deduped on read.
+3. **Inventory**: reserve on order / restore on cancel / 409 on out-of-stock (existing, re-verified).
+4. **Admin delivery charges**: per-PIN charge + free-delivery threshold; ASAP separate from delivery in totals. AdminPinCodes UI adds ASAP toggle + free-threshold.
+5. **Combo edit/swap**: existing (iteration 8/9).
+6. **Available Coupons**: `GET /api/coupons/available` returns eligible-only coupons filtered by date, location, PIN targeting (CouponInput.pin_codes), customer targeting (target_user_ids), min order — with eligible flag + reason. Checkout shows the list with one-tap Apply; stacking (1 product + 1 delivery) + separate discount lines preserved. AdminCoupons UI adds Valid from/until + target PINs.
+7. **Wallet**: balance reconciles with ledger; entries carry date/credit-debit/amount/source/ref/balance_after (existing, re-verified).
+8. **Referral**: anti-self + duplicate prevention verified.
+### Remaining / manual config (P2)
+- Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
+- Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').
+- Combo edited-quantity as a single bundle cart line NOT implemented (combo items still add individually); combo qty min/max admin controls pending.
+- Referral reward currently credits on apply (not gated by a qualifying delivered order); admin Referral-config UI (reward amounts, min qualifying order, limits) pending.
+- Mobile app still a scaffold.
+

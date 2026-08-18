@@ -11,8 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EMPTY = {
-  pincode: "", location_id: "", area_name: "", is_serviceable: true,
-  min_order_value: 0, delivery_charge: "", discount_type: "none",
+  pincode: "", location_id: "", area_name: "", is_serviceable: true, asap_enabled: true,
+  min_order_value: 0, delivery_charge: "", free_delivery_threshold: "", discount_type: "none",
   discount_value: 0, max_discount: "", notes: "",
 };
 
@@ -37,6 +37,7 @@ export default function AdminPinCodes() {
       ...form,
       min_order_value: Number(form.min_order_value) || 0,
       delivery_charge: form.delivery_charge === "" ? null : Number(form.delivery_charge),
+      free_delivery_threshold: form.free_delivery_threshold === "" ? null : Number(form.free_delivery_threshold),
       discount_type: form.discount_type === "none" ? null : form.discount_type,
       discount_value: Number(form.discount_value) || 0,
       max_discount: form.max_discount === "" ? null : Number(form.max_discount),
@@ -69,7 +70,7 @@ export default function AdminPinCodes() {
                 <td className="p-3">{p.discount_type ? `${p.discount_value}${p.discount_type === "percentage" ? "%" : "₹"}` : "—"}</td>
                 <td className="p-3">{p.is_serviceable ? <Badge className="bg-forest-light text-forest">Serviceable</Badge> : <Badge variant="secondary">Not serviceable</Badge>}</td>
                 <td className="p-3 text-right">
-                  <button className="mr-3" onClick={() => { setEditing(p); setForm({ ...p, delivery_charge: p.delivery_charge ?? "", discount_type: p.discount_type || "none", max_discount: p.max_discount ?? "" }); setOpen(true); }} data-testid={`edit-pincode-${p.id}`}><Pencil className="h-4 w-4 text-slate-500 hover:text-forest" /></button>
+                  <button className="mr-3" onClick={() => { setEditing(p); setForm({ ...p, delivery_charge: p.delivery_charge ?? "", free_delivery_threshold: p.free_delivery_threshold ?? "", asap_enabled: p.asap_enabled ?? true, discount_type: p.discount_type || "none", max_discount: p.max_discount ?? "" }); setOpen(true); }} data-testid={`edit-pincode-${p.id}`}><Pencil className="h-4 w-4 text-slate-500 hover:text-forest" /></button>
                   <button onClick={() => del(p.id)} data-testid={`delete-pincode-${p.id}`}><Trash2 className="h-4 w-4 text-slate-500 hover:text-destructive" /></button>
                 </td>
               </tr>
@@ -115,6 +116,8 @@ export default function AdminPinCodes() {
               </div>
             )}
             <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_serviceable} onCheckedChange={(v) => setForm({ ...form, is_serviceable: v })} data-testid="pincode-serviceable" />Serviceable</label>
+            <label className="flex items-center gap-2 text-sm"><Switch checked={form.asap_enabled} onCheckedChange={(v) => setForm({ ...form, asap_enabled: v })} data-testid="pincode-asap" />ASAP delivery available</label>
+            <div><Label>Free delivery above (₹)</Label><Input type="number" data-testid="pincode-free-threshold" placeholder="Optional" value={form.free_delivery_threshold} onChange={(e) => setForm({ ...form, free_delivery_threshold: e.target.value })} /></div>
           </div>
           <DialogFooter><Button className="bg-forest hover:bg-forest-dark" onClick={save} data-testid="save-pincode-btn">Save</Button></DialogFooter>
         </DialogContent>

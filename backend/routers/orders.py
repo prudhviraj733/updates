@@ -101,6 +101,14 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
     if not address:
         raise HTTPException(status_code=400, detail="Invalid delivery address")
 
+    # PIN-code serviceability + PIN-specific delivery rules
+    pin = await db.pincodes.find_one({"pincode": (address.get("pincode") or "").strip()}, {"_id": 0})
+    if not pin or not pin.get("is_serviceable"):
+        raise HTTPException(status_code=400, detail="Sorry, we don't deliver to this PIN code yet.")
+    pin_delivery = pin["delivery_charge"] if pin.get("delivery_charge") is not None else location.get("delivery_charge", 0)
+    pin_min = pin.get("min_order_value") or location.get("min_order_value", 0)
+    pin_free_threshold = pin.get("free_delivery_threshold")
+
     settings = await get_settings(payload.location_id)
 
     # Build order items snapshot
@@ -126,15 +134,20 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
             "quantity": ci["quantity"], "line_total": round(line, 2),
         })
 
-    if subtotal < location.get("min_order_value", 0):
-        raise HTTPException(status_code=400, detail=f"Minimum order value is ₹{location['min_order_value']}")
+    if subtotal < pin_min:
+        raise HTTPException(status_code=400, detail=f"Minimum order value is ₹{pin_min}")
 
     # Delivery type / slot
     slot_id = None
     slot_label = None
-    delivery_charge = location.get("delivery_charge", 0)
+    delivery_charge = pin_delivery
+    pin_free_applied = bool(pin_free_threshold) and subtotal >= pin_free_threshold
+    if pin_free_applied:
+        delivery_charge = 0
     asap_charge = 0.0
     if payload.delivery_type == "asap":
+        if not pin.get("asap_enabled", True):
+            raise HTTPException(status_code=400, detail="ASAP delivery is not available for this PIN code")
         if not settings.get("asap_enabled"):
             raise HTTPException(status_code=400, detail="ASAP delivery not available for this location")
         asap_charge = settings.get("asap_charge", 100)
@@ -171,8 +184,9 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
                 campaign_id = pc.get("campaign_id")
                 free_delivery_applied = pc.get("free_delivery", False)
 
-    if free_delivery_applied:
+    if free_delivery_applied or pin_free_applied:
         delivery_charge = 0
+        free_delivery_applied = True
 
     # Delivery-type coupon (stacks with 1 product coupon; discounts normal/asap/both)
     delivery_discount = 0.0

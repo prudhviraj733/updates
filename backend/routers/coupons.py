@@ -5,7 +5,7 @@ import string
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
-from core.security import require_admin
+from core.security import require_admin, get_current_user
 from models import CouponInput, CouponValidateInput, BulkCouponInput, gen_id, now_iso
 
 router = APIRouter()
@@ -98,6 +98,43 @@ async def list_public_coupons(location_id: str = None):
             continue
         out.append({k: c.get(k) for k in
                     ["code", "discount_type", "discount_value", "min_order_value", "max_discount", "end_date"]})
+    return out
+
+
+@router.get("/coupons/available")
+async def available_coupons(location_id: str, subtotal: float = 0, pincode: str = "",
+                            user: dict = Depends(get_current_user)):
+    """Coupons actually eligible for THIS customer, PIN, cart & date (product + delivery)."""
+    now = datetime.now().isoformat()
+    pincode = (pincode or "").strip()
+    coupons = await db.coupons.find({"is_active": True}, {"_id": 0}).to_list(500)
+    out = []
+    for c in coupons:
+        if c.get("start_date") and c["start_date"] > now:
+            continue
+        if c.get("end_date") and (c["end_date"] + "T23:59:59") < now:
+            continue
+        if c.get("location_ids") and location_id not in c["location_ids"]:
+            continue
+        if c.get("pin_codes"):
+            if not pincode or pincode not in c["pin_codes"]:
+                continue
+        if c.get("target_user_ids") and user["id"] not in c["target_user_ids"]:
+            continue
+        ctype = c.get("coupon_type", "product")
+        eligible = True
+        reason = ""
+        if ctype == "product" and subtotal < c.get("min_order_value", 0):
+            eligible = False
+            reason = f"Add ₹{round(c.get('min_order_value', 0) - subtotal)} more to use"
+        out.append({
+            "code": c["code"], "coupon_type": ctype, "delivery_scope": c.get("delivery_scope", "both"),
+            "discount_type": c["discount_type"], "discount_value": c["discount_value"],
+            "min_order_value": c.get("min_order_value", 0), "max_discount": c.get("max_discount"),
+            "end_date": c.get("end_date"), "eligible": eligible, "reason": reason,
+        })
+    # eligible first
+    out.sort(key=lambda x: (not x["eligible"], x["coupon_type"]))
     return out
 
 

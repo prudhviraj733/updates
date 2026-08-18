@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const EMPTY = { code: "", coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 0, min_order_value: 0, max_discount: null, usage_limit: null, usage_limit_per_customer: null, is_active: true, location_ids: [], category_ids: [] };
+const EMPTY = { code: "", coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 0, min_order_value: 0, max_discount: null, start_date: "", end_date: "", pin_codes: [], usage_limit: null, usage_limit_per_customer: null, is_active: true, location_ids: [], category_ids: [] };
 const BULK_EMPTY = { prefix: "SAVE", count: 10, coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: null, usage_limit: 1, usage_limit_per_customer: 1 };
 
 export default function AdminCoupons() {
@@ -115,6 +115,11 @@ export default function AdminCoupons() {
               <div><Label>Min order value</Label><Input type="number" value={form.min_order_value} onChange={(e) => setForm({ ...form, min_order_value: e.target.value })} /></div>
               <div><Label>Max discount</Label><Input type="number" value={form.max_discount || ""} onChange={(e) => setForm({ ...form, max_discount: e.target.value })} /></div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Valid from</Label><Input type="date" data-testid="coupon-start" value={(form.start_date || "").slice(0, 10)} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
+              <div><Label>Valid until</Label><Input type="date" data-testid="coupon-end" value={(form.end_date || "").slice(0, 10)} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
+            </div>
+            <div><Label>Target PIN codes (comma-separated, blank = all)</Label><Input data-testid="coupon-pins" value={(form.pin_codes || []).join(", ")} onChange={(e) => setForm({ ...form, pin_codes: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} placeholder="e.g. 500034, 500081" /></div>
             <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />Active</label>
           </div>
           <DialogFooter><Button className="bg-forest hover:bg-forest-dark" onClick={save} data-testid="save-coupon-btn">Save</Button></DialogFooter>

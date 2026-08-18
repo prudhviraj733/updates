@@ -42,6 +42,7 @@ export default function Checkout() {
   const [placing, setPlacing] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [useWallet, setUseWallet] = useState(false);
+  const [availCoupons, setAvailCoupons] = useState([]);
 
   // Use Asia/Kolkata date so requested slots align with backend IST computation.
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -67,7 +68,8 @@ export default function Checkout() {
     api.get("/payments/config").then(({ data }) => setPayConfig(data));
     api.get("/settings").then(({ data }) => setSettings(data));
     api.get("/me/wallet").then(({ data }) => setWalletBalance(data.balance || 0)).catch(() => {});
-  }, [location, today]);
+    api.get(`/coupons/available?location_id=${location.id}&subtotal=${cart.subtotal}`).then(({ data }) => setAvailCoupons(data)).catch(() => setAvailCoupons([]));
+  }, [location, today, cart.subtotal]);
 
   if (!location) return null;
   if (cart.items.length === 0) {
@@ -107,6 +109,18 @@ export default function Checkout() {
     }
   };
   const removeCoupon = (type) => { if (type === "delivery") setDeliveryCoupon(null); else setProductCoupon(null); };
+
+  const applyByCode = async (code) => {
+    const appliedCodes = [productCoupon?.code, deliveryCoupon?.code].filter(Boolean);
+    try {
+      const { data } = await api.post("/coupons/validate", {
+        code, location_id: location.id, subtotal: cart.subtotal,
+        delivery_charge: deliveryCharge, asap_charge: extra, applied_codes: appliedCodes,
+      });
+      if (data.coupon_type === "delivery") setDeliveryCoupon(data); else setProductCoupon(data);
+      toast.success(`Coupon applied: -${inr(data.discount)}`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Invalid coupon"); }
+  };
 
   const saveAddress = async () => {
     try {
@@ -324,6 +338,23 @@ export default function Checkout() {
               <Button variant="outline" className="rounded-full" onClick={applyCoupon} data-testid="apply-coupon">Apply</Button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">You can stack 1 product coupon + 1 delivery coupon.</p>
+            {availCoupons.length > 0 && (
+              <div className="mt-3" data-testid="available-coupons">
+                <p className="text-xs font-semibold text-muted-foreground">Available coupons</p>
+                <div className="mt-1 space-y-1.5">
+                  {availCoupons.map((c) => (
+                    <div key={c.code} className="flex items-center justify-between rounded-xl border border-dashed border-forest/40 px-3 py-2 text-sm" data-testid={`avail-coupon-${c.code}`}>
+                      <div>
+                        <span className="font-mono font-semibold text-forest">{c.code}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{c.discount_type === "percentage" ? `${c.discount_value}% off` : `${inr(c.discount_value)} off`}{c.coupon_type === "delivery" ? ` · delivery (${c.delivery_scope})` : ""}</span>
+                        {!c.eligible && c.reason && <p className="text-xs text-amber-600">{c.reason}</p>}
+                      </div>
+                      <Button size="sm" variant="outline" className="h-7 rounded-full text-xs" disabled={!c.eligible} onClick={() => applyByCode(c.code)} data-testid={`apply-avail-${c.code}`}>Apply</Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {walletBalance > 0 && (
               <label className="mt-3 flex cursor-pointer items-center justify-between rounded-xl border border-forest/30 bg-forest-light/40 px-3 py-2.5" data-testid="use-wallet-toggle">
                 <span className="flex items-center gap-2 text-sm font-medium"><Wallet className="h-4 w-4 text-forest" />Use wallet balance ({inr(walletBalance)})</span>

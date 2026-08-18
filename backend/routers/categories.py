@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
@@ -54,6 +56,14 @@ async def admin_list_categories(admin: dict = Depends(require_admin)):
 @router.post("/admin/categories")
 async def create_category(payload: CategoryInput, admin: dict = Depends(require_admin)):
     doc = payload.model_dump()
+    name = doc["name"].strip()
+    dup = await db.categories.find_one({
+        "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+        "parent_id": doc.get("parent_id"),
+    })
+    if dup:
+        label = "Subcategory" if doc.get("parent_id") else "Category"
+        raise HTTPException(status_code=400, detail=f"{label} '{name}' already exists here")
     doc.update({"id": gen_id(), "created_at": now_iso(), "updated_at": now_iso()})
     await db.categories.insert_one(doc)
     doc.pop("_id", None)

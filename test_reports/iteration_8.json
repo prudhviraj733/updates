@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration-8 consolidation review: verified all 9 focus areas end-to-end. Backend pytest 17/17 passing (PIN serviceability + address auto-location, PIN-aware order delivery/free-threshold/ASAP separation, category dedupe (400 + no public dupes + subcategory-by-parent), /coupons/available with PIN + user + eligibility flags, coupon stacking rule (1 product + 1 delivery), wallet balance-ledger reconciliation, admin wallet, self-referral rejection). Frontend Checkout renders Available Coupons list (data-testid available-coupons, 27 apply-avail-<code> buttons, eligibility reasons visible e.g. 'Add \u20b9301 more to use'), wallet toggle present, address restricted to serviceable PIN.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "PUT /api/admin/pincodes/{id} (models.PinCodeInput)",
+        "issue": "Pydantic PinCodeInput was missing asap_enabled and free_delivery_threshold fields. Admin API silently dropped those two fields on create/update, so the AdminPinCodes UI toggles (pincode-asap, pincode-free-threshold) would never persist. Existing values on already-seeded docs still worked because pincodes.py reads via doc.get(). Fixed by adding both fields to PinCodeInput with the correct defaults (asap_enabled: bool = True, free_delivery_threshold: Optional[float] = None).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {"endpoint": "/api/coupons/validate", "issue": "Personalized coupons are hard-coded as coupon_type='product' when computing stacking types (routers/coupons.py L69). Works for current flow, but if a personalized delivery coupon is ever introduced the stacking rule will miscount."},
+      {"endpoint": "/api/orders", "issue": "delivery_coupon_code path does NOT enforce the stacking rule server-side when both a product code and delivery code are supplied directly (only /coupons/validate does). Consider validating types on order create as well."},
+      {"endpoint": "/api/pincodes/check", "issue": "Route responds 200 with {serviceable:false} on unknown PIN (fine). But when the parent location is inactive it also returns serviceable:false silently — no reason field for the client to display why."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Checkout Order Summary", "issue": "With no slot yet selected and only 1 item in cart (\u20b9699 < min 199 threshold not triggered), the visible Order Summary only shows subtotal; delivery / ASAP line items only appear once a delivery option is picked. Confirm this is intended (line items are conditional).", "affected_selectors": ["Order Summary"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8.py",
+    "/app/test_reports/pytest/iter8.xml"
+  ],
+  "action_items": [
+    "REVIEW the models.py PinCodeInput fix I applied — please verify no side-effects and re-seed if any Pydantic strict validation elsewhere",
+    "Consider validating coupon types in orders.py create_order (defense-in-depth for stacking rule)"
+  ],
+  "critical_code_review_comments": [
+    "models.PinCodeInput was out of sync with routers/pincodes.py which reads asap_enabled + free_delivery_threshold from stored docs. This is a silent-drop class of bug — recommend a lint step / pydantic model test that snapshots the union of DB fields.",
+    "routers/coupons.py:_find_coupon in stacking check treats every non-existent applied_code as 'product' (line 69). Prefer skipping unknown codes instead of assuming product-type.",
+    "orders.py does not validate delivery_coupon_code type or stacking; anyone crafting a POST could put a product-type coupon in delivery_coupon_code and get delivery discount. Add an explicit coupon_type == 'delivery' guard (currently the DB query filters by coupon_type='delivery', so it's actually safe — verify)."
+  ],
+  "updated_files": [
+    "/app/backend/models.py (added asap_enabled + free_delivery_threshold to PinCodeInput)",
+    "/app/backend/tests/test_iteration8.py (new)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "smoke-tested, checkout coupons + wallet + PIN restriction all render correctly"},
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345, Customer customer@test.com / Test@12345 (already had wallet balance and TEST_ address at 500034). Auth uses httpOnly cookies; tests use requests.Session().",
+  "seed_data_creation": "Test PIN-targeted coupon TESTPIN<hex> is created and deleted per class; TEST_ORD address created + deleted per order test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration_8 tests at /app/backend/tests/test_iteration8.py cover the 9 consolidation areas. Run: `REACT_APP_BACKEND_URL=<url> pytest backend/tests/test_iteration8.py -o addopts='' -v`. Auth is cookie-based (session), NOT Bearer. Frontend Checkout data-testids: available-coupons, apply-avail-<CODE>, use-wallet-toggle. Admin PIN screen data-testids: pincode-asap, pincode-free-threshold. Coupon screen: coupon-start, coupon-end, coupon-pins. The one bug found (PinCodeInput missing fields) has been fixed in models.py.",
+  "rca of the issue": "PinCodeInput Pydantic model in /app/backend/models.py did not declare asap_enabled or free_delivery_threshold, while /app/backend/routers/pincodes.py reads these via doc.get() from the stored DB doc. FastAPI drops unknown keys during model_dump() -> admin PUT/POST silently discarded any client-supplied asap_enabled and free_delivery_threshold. Repro: PUT /api/admin/pincodes/{id} with {asap_enabled:false, free_delivery_threshold:1234} -> response.asap_enabled remained undefined (interpreted as True downstream). Fix: added the two fields to PinCodeInput with defaults matching pincodes.py fallback (True / None). Verified via TestPincodeAdminFields.test_update_pincode_persists_asap_and_threshold which now passes."
+}

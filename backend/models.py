@@ -142,8 +142,10 @@ class PinCodeInput(BaseModel):
     location_id: str
     area_name: Optional[str] = ""
     is_serviceable: bool = True
+    asap_enabled: bool = True
     min_order_value: float = 0
     delivery_charge: Optional[float] = None
+    free_delivery_threshold: Optional[float] = None
     discount_type: Optional[str] = None       # percentage | fixed | None
     discount_value: float = 0
     max_discount: Optional[float] = None
@@ -203,6 +205,8 @@ class CouponInput(BaseModel):
     is_active: bool = True
     location_ids: List[str] = []
     category_ids: List[str] = []
+    pin_codes: List[str] = []                     # PIN-code targeting (empty = all serviceable PINs)
+    target_user_ids: List[str] = []              # specific customer targeting (empty = all)
     usage_limit: Optional[int] = None            # total redemptions allowed
     usage_limit_per_customer: Optional[int] = None
     campaign_tag: Optional[str] = None           # groups bulk-generated coupons

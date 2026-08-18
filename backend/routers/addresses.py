@@ -8,6 +8,13 @@ from models import AddressInput, gen_id, now_iso
 router = APIRouter()
 
 
+async def _assert_serviceable(pincode: str):
+    pin = await db.pincodes.find_one({"pincode": (pincode or "").strip()}, {"_id": 0})
+    if not pin or not pin.get("is_serviceable"):
+        raise HTTPException(status_code=400, detail="Sorry, we don't deliver to this PIN code yet.")
+    return pin
+
+
 @router.get("/addresses")
 async def list_addresses(user: dict = Depends(get_current_user)):
     docs = await db.addresses.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
@@ -16,7 +23,9 @@ async def list_addresses(user: dict = Depends(get_current_user)):
 
 @router.post("/addresses")
 async def create_address(payload: AddressInput, user: dict = Depends(get_current_user)):
+    pin = await _assert_serviceable(payload.pincode)
     doc = payload.model_dump()
+    doc["location_id"] = pin["location_id"]   # auto-correct to the PIN's serviceable location
     doc.update({"id": gen_id(), "user_id": user["id"], "created_at": now_iso()})
     if doc["is_default"]:
         await db.addresses.update_many({"user_id": user["id"]}, {"$set": {"is_default": False}})
@@ -34,7 +43,9 @@ async def update_address(address_id: str, payload: AddressInput, user: dict = De
     addr = await db.addresses.find_one({"id": address_id, "user_id": user["id"]})
     if not addr:
         raise HTTPException(status_code=404, detail="Address not found")
+    pin = await _assert_serviceable(payload.pincode)
     data = payload.model_dump()
+    data["location_id"] = pin["location_id"]
     if data["is_default"]:
         await db.addresses.update_many({"user_id": user["id"]}, {"$set": {"is_default": False}})
     await db.addresses.update_one({"id": address_id}, {"$set": data})
