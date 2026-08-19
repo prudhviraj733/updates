@@ -95,10 +95,13 @@ async def analytics_products(location_id: str = None, days: int = None, admin: d
     prod, cat, brand = {}, {}, {}
     for o in valid:
         for it in o.get("items", []):
+            pid = it.get("product_id")
+            if not pid:
+                continue
             qty = it.get("quantity", 1)
             rev = it.get("line_total", it.get("unit_price", 0) * qty)
             profit = (it.get("unit_price", 0) - it.get("cost_price", 0)) * qty
-            p = prod.setdefault(it["product_id"], {"product_id": it["product_id"], "name": it.get("name"), "qty": 0, "revenue": 0, "profit": 0})
+            p = prod.setdefault(pid, {"product_id": pid, "name": it.get("name"), "qty": 0, "revenue": 0, "profit": 0})
             p["qty"] += qty; p["revenue"] += rev; p["profit"] += profit
             if it.get("category_id"):
                 c = cat.setdefault(it["category_id"], {"id": it["category_id"], "qty": 0, "revenue": 0, "profit": 0})
@@ -135,12 +138,15 @@ async def analytics_carts(admin: dict = Depends(require_admin)):
     cart_value_total = 0.0
     for c in active_carts:
         for it in c.get("items", []):
-            product = await db.products.find_one({"id": it["product_id"]}, {"_id": 0, "name": 1, "selling_price": 1})
+            pid = it.get("product_id")
+            if not pid:
+                continue
+            product = await db.products.find_one({"id": pid}, {"_id": 0, "name": 1, "selling_price": 1})
             if not product:
                 continue
             qty = it.get("quantity", 1)
             cart_value_total += product.get("selling_price", 0) * qty
-            row = in_cart_products.setdefault(it["product_id"], {"product_id": it["product_id"], "name": product.get("name"), "qty": 0})
+            row = in_cart_products.setdefault(pid, {"product_id": pid, "name": product.get("name"), "qty": 0})
             row["qty"] += qty
 
     # abandoned: carts with items whose user has NO order, or stale carts
@@ -149,7 +155,10 @@ async def analytics_carts(admin: dict = Depends(require_admin)):
     abandoned_value = 0.0
     for c in abandoned:
         for it in c.get("items", []):
-            product = await db.products.find_one({"id": it["product_id"]}, {"_id": 0, "selling_price": 1})
+            pid = it.get("product_id")
+            if not pid:
+                continue
+            product = await db.products.find_one({"id": pid}, {"_id": 0, "selling_price": 1})
             if product:
                 abandoned_value += product.get("selling_price", 0) * it.get("quantity", 1)
 
