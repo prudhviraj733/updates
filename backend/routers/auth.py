@@ -1,4 +1,8 @@
-from datetime import datetime, timezone
+import hashlib
+import os
+import random
+import re
+from datetime import datetime, timezone, timedelta
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -8,13 +12,51 @@ from core.security import (
     hash_password, verify_password, create_access_token, create_refresh_token,
     set_auth_cookies, get_current_user, get_jwt_secret, JWT_ALGORITHM,
 )
-from models import RegisterInput, LoginInput, ProfileUpdate
+from models import RegisterInput, LoginInput, ProfileUpdate, PhoneOtpSendInput, PhoneOtpVerifyInput
 import jwt
 
 router = APIRouter()
 
 MAX_ATTEMPTS = 5
 LOCK_MINUTES = 15
+
+# ---------------- Phone / OTP config ----------------
+OTP_TTL_MINUTES = 5
+OTP_RESEND_COOLDOWN_SECONDS = 30
+OTP_MAX_SENDS_PER_HOUR = 5
+OTP_MAX_VERIFY_ATTEMPTS = 5
+
+
+def normalize_indian_phone(raw: str) -> str:
+    """Validate an Indian mobile number and return it as +91XXXXXXXXXX.
+
+    Rules: exactly 10 national digits starting 6/7/8/9. Optional +91/91/0
+    prefixes are stripped. Raises HTTPException(400) on any invalid input.
+    """
+    if not raw or not isinstance(raw, str):
+        raise HTTPException(status_code=400, detail="Enter a valid mobile number")
+    s = raw.strip().replace(" ", "").replace("-", "")
+    if not re.fullmatch(r"\+?\d+", s):
+        raise HTTPException(status_code=400, detail="Mobile number can only contain digits")
+    digits = re.sub(r"\D", "", s)
+    if digits.startswith("91") and len(digits) == 12:
+        digits = digits[2:]
+    elif digits.startswith("0") and len(digits) == 11:
+        digits = digits[1:]
+    if len(digits) != 10:
+        raise HTTPException(status_code=400, detail="Mobile number must be exactly 10 digits")
+    if digits[0] not in "6789":
+        raise HTTPException(status_code=400, detail="Enter a valid Indian mobile number")
+    return "+91" + digits
+
+
+def _twilio_configured() -> bool:
+    return bool(os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN")
+                and os.environ.get("TWILIO_FROM_NUMBER"))
+
+
+def _hash_otp(otp: str) -> str:
+    return hashlib.sha256((os.environ["JWT_SECRET"] + otp).encode("utf-8")).hexdigest()
 
 
 @router.post("/auth/register")
@@ -35,7 +77,8 @@ async def register(payload: RegisterInput, response: Response):
     uid = str(res.inserted_id)
     set_auth_cookies(response, create_access_token(uid, email, "customer"),
                      create_refresh_token(uid))
-    return {"id": uid, "name": payload.name, "email": email, "phone": payload.phone, "role": "customer"}
+    return {"id": uid, "name": payload.name, "email": email, "phone": payload.phone,
+            "phone_verified": False, "role": "customer"}
 
 
 def _client_ip(request: Request) -> str:
@@ -78,7 +121,8 @@ async def login(payload: LoginInput, request: Request, response: Response):
     set_auth_cookies(response, create_access_token(uid, email, user["role"]),
                      create_refresh_token(uid))
     return {"id": uid, "name": user["name"], "email": email,
-            "phone": user.get("phone"), "role": user["role"]}
+            "phone": user.get("phone"), "phone_verified": user.get("phone_verified", False),
+            "role": user["role"]}
 
 
 @router.post("/auth/logout")
@@ -115,9 +159,112 @@ async def refresh(request: Request, response: Response):
 
 @router.put("/auth/profile")
 async def update_profile(payload: ProfileUpdate, user: dict = Depends(get_current_user)):
-    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updates = {}
+    if payload.name is not None:
+        updates["name"] = payload.name
+    # Phone can NOT be changed here — it must go through OTP verification.
+    if payload.phone is not None:
+        current = user.get("phone")
+        try:
+            incoming = normalize_indian_phone(payload.phone)
+        except HTTPException:
+            incoming = None
+        if not (incoming and incoming == current and user.get("phone_verified")):
+            raise HTTPException(
+                status_code=403,
+                detail="Mobile number changes require OTP verification. Use verify mobile number.",
+            )
     if updates:
         await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": updates})
     updated = await db.users.find_one({"_id": ObjectId(user["id"])})
     return {"id": user["id"], "name": updated["name"], "email": updated["email"],
-            "phone": updated.get("phone"), "role": updated["role"]}
+            "phone": updated.get("phone"), "phone_verified": updated.get("phone_verified", False),
+            "role": updated["role"]}
+
+
+@router.post("/auth/phone/send-otp")
+async def send_phone_otp(payload: PhoneOtpSendInput, user: dict = Depends(get_current_user)):
+    phone = normalize_indian_phone(payload.phone)
+    # Same number already verified → no OTP needed.
+    if phone == user.get("phone") and user.get("phone_verified"):
+        return {"status": "already_verified",
+                "message": "This mobile number is already verified."}
+
+    now = datetime.now(timezone.utc)
+    existing = await db.phone_otps.find_one({"user_id": user["id"]})
+    if existing:
+        last_sent = existing.get("last_sent_at")
+        if last_sent:
+            elapsed = (now - datetime.fromisoformat(last_sent)).total_seconds()
+            if elapsed < OTP_RESEND_COOLDOWN_SECONDS:
+                raise HTTPException(status_code=429,
+                                    detail=f"Please wait {int(OTP_RESEND_COOLDOWN_SECONDS - elapsed)}s before requesting another code.")
+        window_start = existing.get("window_start")
+        send_count = existing.get("send_count", 0)
+        if window_start and (now - datetime.fromisoformat(window_start)).total_seconds() < 3600:
+            if send_count >= OTP_MAX_SENDS_PER_HOUR:
+                raise HTTPException(status_code=429,
+                                    detail="Too many OTP requests. Please try again later.")
+        else:
+            send_count = 0
+            window_start = now.isoformat()
+    else:
+        send_count = 0
+        window_start = now.isoformat()
+
+    otp = f"{random.randint(0, 999999):06d}"
+    await db.phone_otps.update_one(
+        {"user_id": user["id"]},
+        {"$set": {
+            "user_id": user["id"], "phone": phone, "otp_hash": _hash_otp(otp),
+            "expires_at": (now + timedelta(minutes=OTP_TTL_MINUTES)).isoformat(),
+            "attempts": 0, "last_sent_at": now.isoformat(),
+            "send_count": send_count + 1, "window_start": window_start,
+        }},
+        upsert=True,
+    )
+
+    from routers.notifications import send_sms
+    try:
+        await send_sms(phone, f"Your Freshly verification code is {otp}. Valid for {OTP_TTL_MINUTES} minutes.")
+    except Exception:
+        pass
+
+    resp = {"status": "sent", "phone": phone,
+            "expires_in": OTP_TTL_MINUTES * 60,
+            "message": f"An OTP has been sent to {phone}."}
+    if not _twilio_configured():
+        # Dev-mode fallback: SMS isn't configured, expose the code so it stays testable.
+        resp["dev_otp"] = otp
+        resp["message"] = f"SMS is not configured. Dev OTP for {phone}: {otp}"
+    return resp
+
+
+@router.post("/auth/phone/verify-otp")
+async def verify_phone_otp(payload: PhoneOtpVerifyInput, user: dict = Depends(get_current_user)):
+    phone = normalize_indian_phone(payload.phone)
+    otp = (payload.otp or "").strip()
+    if not re.fullmatch(r"\d{6}", otp):
+        raise HTTPException(status_code=400, detail="Enter the 6-digit code")
+
+    rec = await db.phone_otps.find_one({"user_id": user["id"]})
+    if not rec or rec.get("phone") != phone:
+        raise HTTPException(status_code=400, detail="No OTP request found. Please request a new code.")
+    if datetime.fromisoformat(rec["expires_at"]) <= datetime.now(timezone.utc):
+        await db.phone_otps.delete_one({"user_id": user["id"]})
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
+    if rec.get("attempts", 0) >= OTP_MAX_VERIFY_ATTEMPTS:
+        await db.phone_otps.delete_one({"user_id": user["id"]})
+        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please request a new code.")
+
+    if _hash_otp(otp) != rec.get("otp_hash"):
+        await db.phone_otps.update_one({"user_id": user["id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Incorrect OTP. Please try again.")
+
+    await db.users.update_one({"_id": ObjectId(user["id"])},
+                              {"$set": {"phone": phone, "phone_verified": True}})
+    await db.phone_otps.delete_one({"user_id": user["id"]})
+    updated = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return {"id": user["id"], "name": updated["name"], "email": updated["email"],
+            "phone": updated.get("phone"), "phone_verified": True, "role": updated["role"],
+            "message": "Mobile number verified successfully."}

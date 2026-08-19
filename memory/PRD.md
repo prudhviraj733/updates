@@ -244,3 +244,8 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - Referral reward currently credits on apply (not gated by a qualifying delivered order); admin Referral-config UI (reward amounts, min qualifying order, limits) pending.
 - Mobile app still a scaffold.
 
+
+## Iteration 19 (2026-06) — Profile mobile-number OTP verification
+- Backend (routers/auth.py): `normalize_indian_phone()` enforces exactly 10 digits starting 6/7/8/9 (+91), rejecting 6/9/11-digit, letters, bad prefixes. New endpoints: `POST /auth/phone/send-otp` (6-digit OTP, sha256-hashed in `phone_otps`, 5-min TTL, 30s resend cooldown, max 5 sends/hr) and `POST /auth/phone/verify-otp` (max 5 attempts; on success sets user.phone + phone_verified=true). `PUT /auth/profile` now REJECTS (403) any phone change that isn't OTP-verified; same verified number needs no OTP. login/register/me now return `phone_verified`. Dev-mode fallback: when Twilio env not set, send-otp returns `dev_otp` (auto-switches to real SMS once keys added).
+- Frontend (pages/store/Account.js): Profile tab shows current verified number + Verified/Not-verified badge, +91-prefixed 10-digit input with live validation, "Verify Mobile Number" button, 6-digit OTP entry with resend timer. Email behaviour unchanged.
+- Verified via curl (all 9 required cases) + screenshot: 6/9/11-digit + letters + non-6-9-start rejected; valid→OTP; wrong/expired OTP→not changed; correct OTP→changed+verified; direct API phone change→403; unauthenticated→401; resend rate-limited.

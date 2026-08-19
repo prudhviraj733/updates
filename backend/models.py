@@ -69,6 +69,15 @@ class ProfileUpdate(BaseModel):
     phone: Optional[str] = None
 
 
+class PhoneOtpSendInput(BaseModel):
+    phone: str
+
+
+class PhoneOtpVerifyInput(BaseModel):
+    phone: str
+    otp: str
+
+
 # ---------- Address ----------
 class AddressInput(BaseModel):
     label: str = "Home"

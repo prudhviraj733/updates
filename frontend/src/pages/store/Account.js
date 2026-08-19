@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Trash2, Plus, Star } from "lucide-react";
+import { Trash2, Plus, Star, ShieldCheck, ShieldAlert } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useStore } from "@/context/StoreContext";
@@ -13,21 +13,75 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 const EMPTY = { label: "Home", full_name: "", phone: "", line1: "", line2: "", city: "", area: "", pincode: "", is_default: false };
 
 export default function Account() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, refresh } = useAuth();
   const { locations } = useStore();
-  const [profile, setProfile] = useState({ name: "", phone: "" });
+  const [name, setName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [addresses, setAddresses] = useState([]);
   const [addrOpen, setAddrOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY, location_id: "" });
 
+  const currentPhone = user && user !== false ? (user.phone || "") : "";
+  const phoneVerified = user && user !== false ? !!user.phone_verified : false;
+  const digits = newPhone.replace(/\D/g, "");
+  const phoneValid = /^[6-9]\d{9}$/.test(digits);
+  const phoneChanged = ("+91" + digits) !== currentPhone || !phoneVerified;
+
   useEffect(() => {
-    if (user && user !== false) setProfile({ name: user.name, phone: user.phone || "" });
+    if (user && user !== false) {
+      setName(user.name || "");
+      setNewPhone((user.phone || "").replace(/^\+91/, ""));
+    }
     api.get("/addresses").then(({ data }) => setAddresses(data));
   }, [user]);
 
-  const saveProfile = async () => {
-    await updateProfile(profile);
-    toast.success("Profile updated");
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const saveName = async () => {
+    try {
+      await updateProfile({ name });
+      toast.success("Profile updated");
+    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
+  };
+
+  const sendOtp = async () => {
+    if (!phoneValid) { toast.error("Enter a valid 10-digit Indian mobile number"); return; }
+    setSending(true);
+    try {
+      const { data } = await api.post("/auth/phone/send-otp", { phone: digits });
+      if (data.status === "already_verified") {
+        toast.info(data.message);
+        setOtpStep(false);
+        return;
+      }
+      setOtpStep(true);
+      setOtp("");
+      setCooldown(30);
+      if (data.dev_otp) toast.success(`Dev OTP: ${data.dev_otp}`, { duration: 8000 });
+      else toast.success(data.message || "OTP sent");
+    } catch (e) { toast.error(e.response?.data?.detail || "Could not send OTP"); }
+    finally { setSending(false); }
+  };
+
+  const verifyOtp = async () => {
+    setVerifying(true);
+    try {
+      await api.post("/auth/phone/verify-otp", { phone: digits, otp });
+      await refresh();
+      setOtpStep(false);
+      setOtp("");
+      toast.success("Mobile number verified");
+    } catch (e) { toast.error(e.response?.data?.detail || "Verification failed"); }
+    finally { setVerifying(false); }
   };
 
   const saveAddress = async () => {
@@ -52,10 +106,82 @@ export default function Account() {
         <TabsContent value="profile" className="mt-4">
           <div className="rounded-2xl border border-black/5 bg-white p-6">
             <div className="grid gap-4">
-              <div><Label>Name</Label><Input className="mt-1" data-testid="profile-name" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></div>
+              <div><Label>Name</Label><Input className="mt-1" data-testid="profile-name" value={name} onChange={(e) => setName(e.target.value)} /></div>
               <div><Label>Email</Label><Input className="mt-1" value={user?.email || ""} disabled /></div>
-              <div><Label>Phone</Label><Input className="mt-1" data-testid="profile-phone" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></div>
-              <Button className="w-fit rounded-full bg-forest" onClick={saveProfile} data-testid="save-profile">Save changes</Button>
+              <Button className="w-fit rounded-full bg-forest" onClick={saveName} data-testid="save-profile">Save changes</Button>
+
+              <div className="mt-2 border-t border-black/5 pt-4">
+                <div className="flex items-center justify-between">
+                  <Label>Mobile number</Label>
+                  {currentPhone ? (
+                    phoneVerified ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-forest" data-testid="phone-verified-badge"><ShieldCheck className="h-3.5 w-3.5" />Verified</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600" data-testid="phone-unverified-badge"><ShieldAlert className="h-3.5 w-3.5" />Not verified</span>
+                    )
+                  ) : null}
+                </div>
+                {currentPhone && (
+                  <p className="mt-1 text-sm text-muted-foreground" data-testid="current-phone">Current: <span className="font-medium text-foreground">{currentPhone}</span></p>
+                )}
+
+                <div className="mt-2 flex items-stretch gap-2">
+                  <div className="flex items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">+91</div>
+                  <Input
+                    className="flex-1"
+                    data-testid="profile-phone"
+                    placeholder="10-digit mobile number"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={digits}
+                    onChange={(e) => { setNewPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setOtpStep(false); }}
+                  />
+                </div>
+                {digits.length > 0 && !phoneValid && (
+                  <p className="mt-1 text-xs text-destructive" data-testid="phone-error">Enter a valid 10-digit number starting with 6-9.</p>
+                )}
+
+                {!otpStep ? (
+                  <Button
+                    className="mt-3 w-fit rounded-full bg-forest"
+                    disabled={!phoneValid || !phoneChanged || sending}
+                    onClick={sendOtp}
+                    data-testid="verify-phone-btn"
+                  >
+                    {sending ? "Sending…" : "Verify Mobile Number"}
+                  </Button>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-black/5 bg-cream/40 p-4" data-testid="otp-section">
+                    <Label>Enter OTP sent to +91 {digits}</Label>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Input
+                        className="w-40 tracking-[0.4em]"
+                        data-testid="otp-input"
+                        placeholder="000000"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      />
+                      <Button className="rounded-full bg-forest" disabled={otp.length !== 6 || verifying} onClick={verifyOtp} data-testid="submit-otp-btn">
+                        {verifying ? "Verifying…" : "Confirm"}
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3 text-xs">
+                      <button
+                        type="button"
+                        className="font-medium text-forest disabled:text-muted-foreground"
+                        disabled={cooldown > 0 || sending}
+                        onClick={sendOtp}
+                        data-testid="resend-otp-btn"
+                      >
+                        {cooldown > 0 ? `Resend OTP in ${cooldown}s` : "Resend OTP"}
+                      </button>
+                      <button type="button" className="text-muted-foreground" onClick={() => setOtpStep(false)} data-testid="cancel-otp-btn">Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </TabsContent>
