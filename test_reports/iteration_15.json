@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only verification of the improved Admin Dashboard (/admin). Logged in as admin (prudhvirajm847@gmail.com), confirmed all 8 sections render (today-summary, live-orders, sales-trend, inventory-alerts, pin-performance, customer-marketing, financial-snapshot, recent-orders) and that every spot-checked number matches GET /api/admin/dashboard/overview exactly: today sales ₹640 / orders 1 / profit ₹-309.68 / discounts ₹1,070 / delivery ₹140; live orders pending 7, accepted 2, packing 0, out_for_delivery 1, delivered 7, cancelled 7; 30-day trend 18 orders / ₹24,561 / profit ₹4,691.16; inventory 0 low / 54 out + 8 PIN-wise rows (5 out each); financial snapshot gross ₹24,321, product disc ₹8,899, coupon ₹300, delivery ₹1,620, wallet credits ₹2,766.74 / debits ₹2,110, estimated profit ₹4,691.16; customer/marketing 0/8/3/0/2/0; PIN performance rows 500034 (1 order, ₹640, 1 customer, ₹140). Click-through: live-status-pending navigates to /admin/orders?status=pending, the Pending chip is highlighted and all 7 rows are pending. All section/tile links have correct hrefs (inventory, analytics x2, delivery-stats, customers, abandoned-carts, customer-behaviour, coupons, referrals) and /admin/inventory opened successfully. Regression: order status change via status-select worked ('Status updated' toast) and was reverted. Mobile 390px: no horizontal overflow (scrollWidth == clientWidth), cards stack correctly. No JS/page errors — only a benign 401 from the pre-login /auth/me probe.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminDashboard Live Orders vs AdminOrders", "issue": "Status vocabulary mismatch. Dashboard live_orders exposes 'packing' (and omits confirmed/preparing/ready_for_delivery), while AdminOrders STATUSES = pending, accepted, confirmed, preparing, ready_for_delivery, out_for_delivery, delivered, cancelled. Clicking live-status-packing navigates to /admin/orders?status=packing where NO filter chip is highlighted (no Packing chip exists) and the list is always empty; conversely orders in confirmed/preparing/ready_for_delivery are invisible on the dashboard's Live Orders board (they are not counted in any chip).", "selector": "[data-testid=\"live-status-packing\"], [data-testid^=\"filter-\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Dashboard (desktop)", "issues": ["PIN Code Performance Section is rendered as a bare sibling with no top margin (unlike the other blocks wrapped in 'mt-4 grid'), so it sits tighter against the Inventory/Customer grid above — add mt-4 for consistent vertical rhythm.", "PIN Code Performance shows a row with pincode '—' holding 17 of 18 orders (₹23,921) because legacy orders have no pincode; the em-dash row reads like a bug — label it 'Unattributed / Legacy' or exclude it."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Align Live Orders statuses with the actual order status set used by AdminOrders/backend (drop 'packing' or add confirmed/preparing/ready_for_delivery chips) so click-through always lands on a real, highlighted filter and no in-progress orders are hidden.",
+    "Add a Packing/matching chip to AdminOrders or remove it from the dashboard — currently /admin/orders?status=packing shows no active chip.",
+    "Cosmetic: add mt-4 to the PIN Code Performance Section; label the '—' PIN row (orders without pincode) explicitly."
+  ],
+  "critical_code_review_comments": [
+    "AdminDashboard.js: single api.get on mount with no retry/refresh; a transient failure shows a permanent 'Failed to load dashboard.' with no retry button — add a retry action.",
+    "AdminDashboard.js STATUS_META keys are hardcoded to a status list that differs from AdminOrders.STATUSES — extract a shared ORDER_STATUSES constant to prevent drift.",
+    "Financial snapshot renders '-₹0' for zero refunds/referral cost (neg flag applied unconditionally); suppress the minus sign when value is 0."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only request)", "frontend": "95% (all sections, numbers, links, click-through and Orders regression pass; 1 status-vocabulary defect)"},
+  "seed_data_creation": "None. One order's status was toggled pending -> accepted -> pending and restored.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345",
+  "context_for_next_testing_agent": "Dashboard testids verified: admin-dashboard, today-summary, today-<label-slug>, live-orders, live-status-<status>, sales-trend, trend-today/trend-7-days/trend-30-days, inventory-alerts, pin-performance, pinperf-<pincode>, customer-marketing, cm-<label-slug>, financial-snapshot, recent-orders. Orders page: filter-<status>, status-select-<id>, accept-<id>. Only open issue is the packing vs confirmed/preparing/ready_for_delivery status mismatch between dashboard and Orders page.",
+  "rca_of_the_issue": "Dashboard backend (routers/admin_misc.py STATUSES) defines a 6-status board including 'packing', but the order lifecycle actually used by AdminOrders/order updates uses confirmed/preparing/ready_for_delivery. Two independent status lists exist, so the Packing chip is permanently 0 and its click-through lands on an unmatched filter."
+}

@@ -227,6 +227,11 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - Address validation already enforced serviceability + auto-associates the PIN's location (req 6, confirmed).
 - Admin Customer 360 already shows wallet balance stat + full Wallet ledger tab + adjust/refund (req satisfied).
 
+## Iteration 17 (2026-06) — Admin Dashboard revamp (7 real-data sections)
+- Added `GET /admin/dashboard/overview` (routers/admin_misc.py) computing 7 sections from real orders/inventory/wallet/referrals (no mock): (1) Today's Summary — orders/sales/profit/discounts/delivery collected/refunds; (2) Live Orders by status (pending/accepted/packing/out_for_delivery/delivered/cancelled); (3) Sales Trend today/7d/30d with orders/revenue/profit; (4) Inventory Alerts — low/out counts + PIN-wise issues; (5) PIN Performance — orders/sales/customers/delivery per PIN; (6) Customer & Marketing — new customers, cart abandonment, stopped-buying(30d+), coupon usage, referral customers; (7) Financial Snapshot — gross sales, product/coupon discounts, delivery revenue, refunds, wallet credits/debits, referral reward cost, estimated profit. Existing `/admin/dashboard/stats` kept.
+- Rewrote AdminDashboard.js into responsive cards/grid (compact on mobile) with click-through links to Orders/Inventory/Analytics/Customers/Referrals; Live-Order status chips navigate to `/admin/orders?status=<s>` (AdminOrders now reads the `status` query param). No detailed analytics duplicated — quick overview + links.
+- Verified via curl: all sections return live values (e.g. 30d: 18 orders / ₹24,561 / profit ₹4,691; estimated_profit ₹4,691). Frontend compiles clean.
+
 ### Remaining / manual config (P2)
 - Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
 - Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').

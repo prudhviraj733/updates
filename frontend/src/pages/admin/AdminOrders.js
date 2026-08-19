@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Zap, Bell, Check } from "lucide-react";
@@ -28,7 +29,8 @@ function beep() {
 export default function AdminOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
-  const [filter, setFilter] = useState("");
+  const [params] = useSearchParams();
+  const [filter, setFilter] = useState(params.get("status") || "");
   const [newCount, setNewCount] = useState(0);
   const prevCount = useRef(0);
 
