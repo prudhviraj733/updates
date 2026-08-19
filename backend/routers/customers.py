@@ -68,7 +68,10 @@ async def customer_360(user_id: str, admin: dict = Depends(require_admin)):
             continue
         value = 0.0
         for it in c["items"]:
-            p = await db.products.find_one({"id": it["product_id"]}, {"_id": 0, "selling_price": 1, "name": 1})
+            pid = it.get("product_id")
+            if not pid:
+                continue
+            p = await db.products.find_one({"id": pid}, {"_id": 0, "selling_price": 1, "name": 1})
             if p:
                 value += p.get("selling_price", 0) * it.get("quantity", 1)
         abandoned.append({"location_id": c.get("location_id"), "item_count": len(c["items"]), "value": round(value, 2)})

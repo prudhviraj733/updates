@@ -18,11 +18,16 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     api.get("/locations").then(({ data }) => {
       setLocations(data);
-      const saved = localStorage.getItem("location_id");
-      const found = data.find((l) => l.id === saved) || data[0];
+      const savedLoc = localStorage.getItem("location_id");
+      const savedPin = localStorage.getItem("pincode");
+      const found = data.find((l) => l.id === savedLoc) || data[0];
       if (found) {
         setLocationState(found);
         localStorage.setItem("location_id", found.id);
+        const pins = found.pincodes || [];
+        const pin = (savedPin && pins.includes(savedPin)) ? savedPin : (pins[0] || null);
+        setPincodeState(pin || null);
+        if (pin) localStorage.setItem("pincode", pin); else localStorage.removeItem("pincode");
       } else {
         setLocationModalOpen(true);
       }
@@ -32,10 +37,9 @@ export function StoreProvider({ children }) {
   const setLocation = (loc, pin = null) => {
     setLocationState(loc);
     localStorage.setItem("location_id", loc.id);
-    if (pin !== null) {
-      setPincodeState(pin || null);
-      if (pin) localStorage.setItem("pincode", pin); else localStorage.removeItem("pincode");
-    }
+    const resolved = pin !== null ? pin : ((loc.pincodes && loc.pincodes[0]) || null);
+    setPincodeState(resolved || null);
+    if (resolved) localStorage.setItem("pincode", resolved); else localStorage.removeItem("pincode");
     setLocationModalOpen(false);
   };
   const setPincode = (pin) => {

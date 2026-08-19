@@ -220,6 +220,13 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - New Referrals section: backend `GET /admin/referrals` (referrers, referred customers, rewards, anti-self-referral status) + `AdminReferrals` page (`/admin/referrals`) with summary cards, anti-self banner, expandable referrers table.
 - Verified: testing_agent iteration_13 — frontend 100% (all 12 links route correctly, active highlight, sub-link expansion, referrals page, mobile drawer, 21 admin routes regress-clean).
 
+## Iteration 16 (2026-06) — Fix: PIN flow always engages + new-PIN inventory + Copy Inventory
+- **Root cause of "PIN not working"**: customer init auto-picked a location but never a `pincode`, so PIN-wise inventory/delivery silently fell back to location behaviour. Fixed: StoreContext now derives `pincode` from the location's `pincodes[0]` (or saved PIN) on load and whenever a bare service area is picked — every session now has a PIN. Verified: header shows "Banjara Hills · 500034" even after clearing stored PIN.
+- **New PINs had no inventory**: `create_pincode` now auto-provisions PIN-level inventory for all active products (copying the parent location's stock, enabled). Verified: new PIN 520003 immediately lists 30 products, serviceable at ₹60.
+- **Copy Inventory**: `POST /admin/inventory/copy {from_pincode, to_pincodes[]}` + Admin Inventory "Copy this PIN → target" control. Verified: 500034→520003 copied 33 rows.
+- Address validation already enforced serviceability + auto-associates the PIN's location (req 6, confirmed).
+- Admin Customer 360 already shows wallet balance stat + full Wallet ledger tab + adjust/refund (req satisfied).
+
 ### Remaining / manual config (P2)
 - Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
 - Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').

@@ -50,6 +50,20 @@ async def create_pincode(payload: PinCodeInput, admin: dict = Depends(require_ad
     doc.update({"id": gen_id(), "created_at": now_iso(), "updated_at": now_iso()})
     await db.pincodes.insert_one(doc)
     doc.pop("_id", None)
+    # Provision PIN-level inventory so products are immediately available for this new PIN
+    loc_id = doc["location_id"]
+    prods = await db.products.find({"is_active": True}, {"_id": 0, "id": 1}).to_list(5000)
+    for p in prods:
+        if await db.inventory.find_one({"product_id": p["id"], "pincode": doc["pincode"]}):
+            continue
+        loc_inv = await db.inventory.find_one(
+            {"product_id": p["id"], "location_id": loc_id, "pincode": {"$exists": False}}, {"_id": 0})
+        await db.inventory.insert_one({
+            "id": gen_id(), "product_id": p["id"], "pincode": doc["pincode"], "location_id": loc_id,
+            "available_quantity": (loc_inv.get("available_quantity", 0) if loc_inv else 0),
+            "reserved_quantity": 0, "sold_quantity": 0, "low_stock_threshold": 5,
+            "enabled": True, "updated_at": now_iso(),
+        })
     return doc
 
 

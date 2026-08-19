@@ -23,6 +23,7 @@ export default function AdminInventory() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [bulkStock, setBulkStock] = useState("");
+  const [copyTo, setCopyTo] = useState("");
 
   useEffect(() => {
     api.get("/admin/pincodes").then(({ data }) => {
@@ -69,6 +70,14 @@ export default function AdminInventory() {
     } catch { toast.error("Error enabling products"); }
   };
 
+  const copyInv = async () => {
+    if (!copyTo) { toast.error("Select a target PIN"); return; }
+    try {
+      const { data } = await api.post("/admin/inventory/copy", { from_pincode: pincode, to_pincodes: [copyTo] });
+      toast.success(`Copied ${data.copied} product rows to ${copyTo}`);
+    } catch { toast.error("Copy failed"); }
+  };
+
   const filtered = items.filter((it) => {
     if (q && !`${it.product_name} ${it.sku}`.toLowerCase().includes(q.toLowerCase())) return false;
     if (status === "enabled" && !it.enabled) return false;
@@ -109,6 +118,16 @@ export default function AdminInventory() {
         </div>
         <Button className="bg-forest hover:bg-forest-dark" onClick={() => enableAll("pin")} data-testid="enable-all-pin">Enable All (this PIN)</Button>
         <Button variant="outline" onClick={() => enableAll("all")} data-testid="enable-all-serviceable">Enable All (all PINs)</Button>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-500">Copy this PIN → target</label>
+          <div className="flex gap-2">
+            <Select value={copyTo} onValueChange={setCopyTo}>
+              <SelectTrigger className="w-36" data-testid="copy-target"><SelectValue placeholder="Target PIN" /></SelectTrigger>
+              <SelectContent>{pins.filter((p) => p.pincode !== pincode).map((p) => <SelectItem key={p.pincode} value={p.pincode}>{p.pincode}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button variant="outline" onClick={copyInv} data-testid="copy-inventory-btn">Copy</Button>
+          </div>
+        </div>
       </div>
 
       {currentPin && (

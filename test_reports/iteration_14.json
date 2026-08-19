@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 14 (PIN serviceability + auto-provisioned PIN inventory + Copy Inventory + Customer 360 wallet) verified end-to-end. Backend: 8/8 pytest cases pass in /app/backend/tests/test_pin_iter14.py — /pincodes/check for serviceable (500034 -> ₹40) and unserviceable (111111), creating a NEW PIN auto-provisions PIN-level inventory (admin/inventory rows > 0, /products?pincode=<new> non-empty), /admin/inventory/copy correctly clones stock (137 sentinel confirmed on target), per-PIN isolation preserved, updating a PIN's delivery_charge is immediately reflected by /pincodes/check (55 read-back), unserviceable PIN blocked at /addresses. Frontend Playwright: home header shows 'Banjara Hills · 500034' automatically on first load (StoreContext derives from location.pincodes[0]); localStorage.pincode = '500034'. Location modal — PIN 111111 shows 'we don't deliver' and 'Shop this area' hidden; PIN 500034 shows 'Shop this area' and clicking persists pincode. Admin PIN Codes page: 'Add PIN Code' modal opens with all required fields. Admin Inventory (/admin/inventory): copy-target + copy-inventory-btn both present, 30 products listed for 500034, Delivery ₹40 badge shown. Admin Customer 360 (/admin/customers/<id>): Wallet stat card (₹656.74) visible, Wallet tab renders full ledger with dated cashback/withdrawal/promo entries and running balance.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/customers/{id}/full", "issue": "Threw 500 KeyError: 'product_id' when a saved cart contained a non-product line (e.g. combo). Fixed defensively in routers/customers.py: skip cart items without product_id when computing abandoned-cart value."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pin_iter14.py",
+    "/app/test_reports/pytest/iter14.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/pincodes.create_pincode auto-provisions inventory rows synchronously in a Python for-loop (30+ inserts). For catalogs with 1000s of products this will block; consider bulk_write with insert_many + a projection to fetch existing PIN rows once instead of per-product find_one.",
+    "routers/inventory.copy_inventory does not validate that from_pincode != any of to_pincodes before hitting DB — it only skips the equal one silently. Add explicit response note when self-copy filtered so admins understand the counted rows.",
+    "routers/customers.customer_360 iterated cart items assuming product_id exists (fixed) — audit other places (orders/analytics) that iterate cart/order lines to ensure combo lines don't break.",
+    "StoreContext derives pincode from location.pincodes[0] on init but on setLocation defaults to loc.pincodes[0] which may not equal the user's saved address PIN if they switch locations. Consider prefer saved-address PIN over location.pincodes[0] when the two locations differ.",
+    "Checkout.deliveryCharge reads /pincodes/check per selectedAddress.pincode which is correct — but if the customer has no address for the current location and pincode is null, deliveryInfo stays null and falls back to location.delivery_charge; UX could show which PIN is being used."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pin_iter14.py",
+    "/app/backend/routers/customers.py"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (header, location modal, admin PIN add, admin inventory copy testids, customer 360 wallet all verified)"},
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345; Customer customer@test.com / Test@12345",
+  "seed_data_creation": "None persistent — tests create temporary PINs (prefixed unique 6-digit) and delete them after asserting auto-provision + copy. Sentinel stock value 137 was written to PIN_A for a single product; safe / non-destructive.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend PIN + inventory contract is stable. Use tests/test_pin_iter14.py (auto-provision + copy) alongside tests/test_pin_inventory_iter12.py (per-PIN charge + isolation). Customer 360 previously 500'd on carts with non-product lines — defensive guard added in routers/customers.py; retest if the cart schema evolves. Frontend testids in play: pincode-check-input/btn, use-pincode-location, add-pincode-btn, copy-target, copy-inventory-btn, tab-c-wallet, customer-row-<id>.",
+  "rca of the issue": "Customer 360 500 root-caused to abandoned-cart aggregator dereferencing it['product_id'] on cart items which for combo lines don't have that key. Fixed by using .get('product_id') and continue when absent."
+}

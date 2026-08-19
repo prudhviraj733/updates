@@ -188,6 +188,11 @@ class BulkEnableInput(BaseModel):
     set_stock: Optional[int] = None
 
 
+class CopyInventoryInput(BaseModel):
+    from_pincode: str
+    to_pincodes: List[str] = []
+
+
 # ---------- Cart ----------
 class CartItemInput(BaseModel):
     product_id: str

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
 from core.security import require_admin
-from models import InventoryInput, BulkEnableInput, gen_id, now_iso
+from models import InventoryInput, BulkEnableInput, CopyInventoryInput, gen_id, now_iso
 
 router = APIRouter()
 
@@ -162,3 +162,31 @@ async def enable_all(payload: BulkEnableInput, admin: dict = Depends(require_adm
                 })
             affected += 1
     return {"pincodes": pins, "products": len(products), "rows_affected": affected}
+
+
+@router.post("/admin/inventory/copy")
+async def copy_inventory(payload: CopyInventoryInput, admin: dict = Depends(require_admin)):
+    """Copy one PIN's full stock/availability setup to one or more other PIN codes."""
+    src = await db.inventory.find({"pincode": payload.from_pincode}, {"_id": 0}).to_list(20000)
+    if not src:
+        raise HTTPException(status_code=400, detail="Source PIN has no inventory configured")
+    copied = 0
+    for dest in payload.to_pincodes:
+        if dest == payload.from_pincode:
+            continue
+        pin = await db.pincodes.find_one({"pincode": dest}, {"_id": 0})
+        loc_id = pin["location_id"] if pin else None
+        for row in src:
+            fields = {"available_quantity": row.get("available_quantity", 0),
+                      "enabled": row.get("enabled", True),
+                      "low_stock_threshold": row.get("low_stock_threshold", 5),
+                      "updated_at": now_iso()}
+            existing = await db.inventory.find_one({"product_id": row["product_id"], "pincode": dest})
+            if existing:
+                await db.inventory.update_one({"_id": existing["_id"]}, {"$set": fields})
+            else:
+                await db.inventory.insert_one({"id": gen_id(), "product_id": row["product_id"],
+                                               "pincode": dest, "location_id": loc_id,
+                                               "reserved_quantity": 0, "sold_quantity": 0, **fields})
+            copied += 1
+    return {"copied": copied, "to": payload.to_pincodes}
