@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Truck, Check, ExternalLink } from "lucide-react";
+import { ArrowLeft, Truck, Check, ExternalLink, ShieldCheck } from "lucide-react";
 import api, { inr } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,17 @@ export default function AdminOrderDetail() {
   const saveTracking = async () => { try { await api.put(`/admin/orders/${id}/tracking`, { tracking_url: tracking, tracking_provider: provider }); toast.success("Tracking link saved"); load(); } catch (e) { toast.error(e.response?.data?.detail || "Error"); } };
 
   if (!order) return <div className="p-6 text-slate-400">Loading…</div>;
+
+  const itemsTotal = (order.items || []).reduce((s, it) => s + (it.line_total || 0), 0);
+  const FLOW = ["pending", "accepted", "confirmed", "preparing", "ready_for_delivery", "out_for_delivery", "delivered"];
+  const curIdx = FLOW.indexOf(order.status);
+  const terminal = order.status === "delivered" || order.status === "cancelled";
+  const statusDisabled = (s) => {
+    if (terminal) return s !== order.status;
+    if (s === "cancelled") return false;
+    const i = FLOW.indexOf(s);
+    return i !== -1 && curIdx !== -1 && i < curIdx;
+  };
 
   return (
     <div data-testid="admin-order-detail" className="max-w-5xl">
@@ -87,32 +98,46 @@ export default function AdminOrderDetail() {
         <div className="space-y-6">
           <div className="rounded-xl border bg-white p-4 text-sm">
             <p className="mb-2 font-semibold">Customer</p>
-            <p>{order.customer_name}</p><p className="text-slate-500">{order.customer_phone}</p>
-            <div className="mt-3 text-slate-600">
+            <p data-testid="order-customer-name">{order.customer_name}</p>
+            <p className="flex items-center gap-1.5 text-slate-500" data-testid="order-customer-phone">
+              {order.customer_phone || order.address?.phone || "—"}
+              {order.customer_phone_verified && (
+                <span className="inline-flex items-center gap-0.5 text-xs font-medium text-forest" data-testid="order-phone-verified"><ShieldCheck className="h-3 w-3" />Verified</span>
+              )}
+            </p>
+            <div className="mt-3 text-slate-600" data-testid="order-address">
               <p>{order.address?.full_name} · {order.address?.phone}</p>
               <p>{order.address?.line1}{order.address?.line2 ? `, ${order.address.line2}` : ""}</p>
-              <p>{order.address?.area} {order.address?.city} - {order.address?.pincode}</p>
+              <p>{order.address?.area && `${order.address.area}, `}{order.address?.city} - {order.address?.pincode}</p>
             </div>
-            <p className="mt-3 text-slate-500">{order.delivery_type === "asap" ? "ASAP (~2 hrs)" : order.slot_label}</p>
+            <div className="mt-3 space-y-0.5 text-slate-500">
+              <p data-testid="order-service-area">Service area: <span className="text-slate-700">{order.location_name}</span></p>
+              <p data-testid="order-pincode">PIN code: <span className="text-slate-700">{order.pincode || order.address?.pincode || "—"}</span></p>
+              <p data-testid="order-delivery">Delivery: <span className="text-slate-700">{order.delivery_type === "asap" ? "ASAP (~2 hrs)" : (order.slot_label || "—")}</span></p>
+            </div>
           </div>
 
           <div className="rounded-xl border bg-white p-4 text-sm">
             <p className="mb-3 font-semibold">Payment Summary</p>
+            {order.combo_discount > 0 && <Row l="Items total" v={inr(itemsTotal)} />}
+            {order.combo_discount > 0 && <Row l="Combo savings" v={`- ${inr(order.combo_discount)}`} muted />}
             <Row l="Subtotal" v={inr(order.subtotal)} />
-            {order.product_discount > 0 && <Row l="Product savings" v={`- ${inr(order.product_discount)}`} muted />}
             {order.coupon_discount > 0 && <Row l={`Coupon ${order.coupon_code || ""}`} v={`- ${inr(order.coupon_discount)}`} muted />}
             <Row l="Delivery" v={order.free_delivery_applied ? "FREE" : inr(order.delivery_charge)} />
             {order.asap_charge > 0 && <Row l="ASAP charge" v={inr(order.asap_charge)} />}
+            {order.delivery_discount > 0 && <Row l={`Delivery coupon ${order.delivery_coupon_code || ""}`} v={`- ${inr(order.delivery_discount)}`} muted />}
+            {order.wallet_used > 0 && <Row l="Wallet used" v={`- ${inr(order.wallet_used)}`} muted />}
             <div className="my-2 border-t" />
-            <Row l="Total" v={inr(order.final_amount)} bold />
-            <p className="mt-2 text-xs text-slate-400">{order.payment_method?.toUpperCase()} · {order.payment_status}</p>
+            <Row l="Total payable" v={inr(order.final_amount)} bold />
+            {order.product_discount > 0 && <p className="mt-1 text-xs text-forest" data-testid="order-mrp-savings">You saved {inr(order.product_discount)} off MRP</p>}
+            <p className="mt-2 text-xs text-slate-400" data-testid="order-payment-meta">{order.payment_method?.toUpperCase()} · {order.payment_status}</p>
           </div>
 
           <div className="rounded-xl border bg-white p-4">
             <Label>Update internal status</Label>
             <Select value={order.status} onValueChange={setStatus}>
               <SelectTrigger className="mt-1" data-testid="order-status-select"><SelectValue /></SelectTrigger>
-              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
+              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} disabled={statusDisabled(s)}>{s.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
             </Select>
             <p className="mt-2 text-xs text-slate-400">Customer sees: <b>{order.customer_status}</b></p>
           </div>

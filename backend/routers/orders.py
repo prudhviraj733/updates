@@ -15,6 +15,22 @@ router = APIRouter()
 ORDER_STATUSES = ["pending", "accepted", "confirmed", "preparing", "ready_for_delivery",
                   "out_for_delivery", "delivered", "cancelled"]
 
+# Forward-only fulfilment sequence (cancellation is handled separately)
+ORDER_FLOW = ["pending", "accepted", "confirmed", "preparing", "ready_for_delivery",
+              "out_for_delivery", "delivered"]
+
+
+def _dedupe_history(history):
+    """Return status history with each status appearing only once (earliest kept)."""
+    seen, out = set(), []
+    for h in history or []:
+        s = h.get("status")
+        if s in seen:
+            continue
+        seen.add(s)
+        out.append(h)
+    return out
+
 CUSTOMER_STATUS_MAP = {
     "pending": "Order Placed",
     "accepted": "Order Confirmed",
@@ -262,6 +278,7 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "user_id": user["id"],
         "customer_name": user["name"],
         "customer_phone": user.get("phone", ""),
+        "customer_phone_verified": user.get("phone_verified", False),
         "location_id": payload.location_id,
         "location_name": location["name"],
         "pincode": pin.get("pincode"),
@@ -330,6 +347,7 @@ async def get_order(order_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Order not found")
     if order["user_id"] != user["id"] and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Not allowed")
+    order["status_history"] = _dedupe_history(order.get("status_history"))
     order["customer_status"] = customer_status(order.get("status"))
     return order
 
@@ -368,10 +386,11 @@ async def accept_order(order_id: str, admin: dict = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Order not found")
     if order.get("accepted"):
         return await db.orders.find_one({"id": order_id}, {"_id": 0})
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"accepted": True, "accepted_at": now_iso(), "status": "accepted", "updated_at": now_iso()},
-         "$push": {"status_history": {"status": "accepted", "at": now_iso()}}})
+    push = {"$set": {"accepted": True, "accepted_at": now_iso(), "status": "accepted", "updated_at": now_iso()}}
+    existing = {h.get("status") for h in order.get("status_history", [])}
+    if "accepted" not in existing:
+        push["$push"] = {"status_history": {"status": "accepted", "at": now_iso()}}
+    await db.orders.update_one({"id": order_id}, push)
     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
     try:
         await notify_order(updated, "accepted")
@@ -419,27 +438,48 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, admin: 
     order = await db.orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    await _apply_inventory_transition(order, payload.status)
-    update = {"status": payload.status, "updated_at": now_iso()}
-    if payload.status == "delivered" and order.get("payment_method") == "cod":
+    cur = order["status"]
+    new = payload.status
+
+    # Terminal states never change again
+    if cur in ("delivered", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Order is already {cur} and cannot change status")
+    # No-op if the status is unchanged (prevents duplicate timeline entries)
+    if new == cur:
+        order["status_history"] = _dedupe_history(order.get("status_history"))
+        order.pop("_id", None)
+        order["customer_status"] = customer_status(order["status"])
+        return order
+    # Enforce forward-only progression; cancellation is handled separately
+    if new != "cancelled" and new in ORDER_FLOW and cur in ORDER_FLOW:
+        if ORDER_FLOW.index(new) < ORDER_FLOW.index(cur):
+            raise HTTPException(status_code=400, detail="Cannot move an order backwards in the fulfilment flow")
+
+    await _apply_inventory_transition(order, new)
+    update = {"status": new, "updated_at": now_iso()}
+    if new == "delivered" and order.get("payment_method") == "cod":
         update["payment_status"] = "paid"
     # Refund to wallet when cancelling a paid (online) order
-    if (payload.status == "cancelled" and order["status"] != "cancelled"
-            and order.get("payment_status") == "paid"):
+    if new == "cancelled" and order.get("payment_status") == "paid":
         from routers.wallet import add_wallet_entry
         already = await db.wallet_ledger.find_one({"order_id": order_id, "reason": "refund"})
         if not already:
             await add_wallet_entry(order["user_id"], order.get("final_amount", 0), "refund",
                                    order_id=order_id, notes=f"Refund for cancelled order {order.get('order_number')}")
             update["payment_status"] = "refunded"
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": update, "$push": {"status_history": {"status": payload.status, "at": now_iso()}}})
-    if payload.status == "delivered" and order["status"] != "delivered":
+
+    ops = {"$set": update}
+    existing = {h.get("status") for h in order.get("status_history", [])}
+    if new not in existing:
+        ops["$push"] = {"status_history": {"status": new, "at": now_iso()}}
+    await db.orders.update_one({"id": order_id}, ops)
+
+    if new == "delivered":
         await _grant_rewards(await db.orders.find_one({"id": order_id}, {"_id": 0}))
     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    updated["status_history"] = _dedupe_history(updated.get("status_history"))
     try:
-        await notify_order(updated, payload.status)
+        await notify_order(updated, new)
     except Exception:
         pass
     return updated
