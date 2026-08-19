@@ -30,14 +30,13 @@ def _combo_item_cfg(pkg: dict, pid: str) -> dict:
     }
 
 
-async def _stock_at(product_id: str, location_id: str):
-    if not location_id:
-        return None
-    inv = await db.inventory.find_one({"product_id": product_id, "location_id": location_id}, {"_id": 0})
-    return inv["available_quantity"] if inv else 0
+async def _stock_at(product_id: str, location_id: str, pincode: str = None):
+    from routers.inventory import resolve_stock
+    stock, _ = await resolve_stock(product_id, pincode=pincode, location_id=location_id)
+    return stock
 
 
-async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str, limit: int = 8) -> list:
+async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str, pincode: str = None, limit: int = 8) -> list:
     """Swap options for a combo item: admin-approved first, then smart same-subcategory /
     same-category suggestions (each tagged recommended + source)."""
     cfg = _combo_item_cfg(pkg, pid)
@@ -72,7 +71,7 @@ async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str,
             "id": ap["id"], "name": ap["name"], "pack_size": ap.get("pack_size", ""),
             "images": ap.get("images", []), "selling_price": ap.get("selling_price", 0),
             "mrp": ap.get("mrp", 0), "subcategory_id": ap.get("subcategory_id"),
-            "category_id": ap.get("category_id"), "stock": await _stock_at(ap["id"], location_id),
+            "category_id": ap.get("category_id"), "stock": await _stock_at(ap["id"], location_id, pincode),
             "source": source, "recommended": ap.get("subcategory_id") == sub,
         })
     out.sort(key=lambda a: (0 if a["recommended"] else (1 if a.get("category_id") == cat else 2),
@@ -80,7 +79,7 @@ async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str,
     return out[:limit]
 
 
-async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str, validate_stock: bool = True) -> dict:
+async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str, validate_stock: bool = True, pincode: str = None) -> dict:
     """Validate customer's combo selections (swaps + quantities) against admin rules,
     check location inventory, and compute the effective bundle price + savings."""
     swaps = pkg.get("swap_options", {}) or {}
@@ -110,7 +109,7 @@ async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str
         qty = cfg["default_qty"] if requested is None else max(0, int(requested))
         if cfg["qty_editable"] and cfg["max_qty"]:
             qty = min(qty, cfg["max_qty"])
-        stock = await _stock_at(chosen_id, location_id)
+        stock = await _stock_at(chosen_id, location_id, pincode)
         if validate_stock and stock is not None and qty > stock:
             raise HTTPException(status_code=409, detail=f"Only {stock} of {chosen['name']} in stock")
         if qty <= 0:
@@ -139,7 +138,7 @@ async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str
 
 
 @router.get("/packages/{package_id}")
-async def get_package(package_id: str, location_id: str = None):
+async def get_package(package_id: str, location_id: str = None, pincode: str = None):
     pkg = await db.packages.find_one({"id": package_id, "is_active": True}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Combo not found")
@@ -160,8 +159,8 @@ async def get_package(package_id: str, location_id: str = None):
         p["discount_percent"] = round((p["mrp"] - p["selling_price"]) / p["mrp"] * 100) if p.get("mrp", 0) > p.get("selling_price", 0) else 0
         cfg = _combo_item_cfg(pkg, pid)
         p["config"] = cfg
-        p["stock"] = await _stock_at(pid, location_id)
-        alts = await _combo_alternatives(pkg, pid, p, location_id)
+        p["stock"] = await _stock_at(pid, location_id, pincode)
+        alts = await _combo_alternatives(pkg, pid, p, location_id, pincode)
         p["alternatives"] = alts
         p["swappable"] = cfg["swap_allowed"] and len(alts) > 0
         products.append(p)

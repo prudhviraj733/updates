@@ -24,7 +24,7 @@ function loadRazorpay() {
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const { location, cart, clearCart, refreshCart } = useStore();
+  const { location, cart, clearCart, refreshCart, pincode } = useStore();
   const [addresses, setAddresses] = useState([]);
   const [addressId, setAddressId] = useState(null);
   const [slotDays, setSlotDays] = useState([]);
@@ -43,6 +43,7 @@ export default function Checkout() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [useWallet, setUseWallet] = useState(false);
   const [availCoupons, setAvailCoupons] = useState([]);
+  const [deliveryInfo, setDeliveryInfo] = useState(null);
 
   // Use Asia/Kolkata date so requested slots align with backend IST computation.
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -71,6 +72,13 @@ export default function Checkout() {
     api.get(`/coupons/available?location_id=${location.id}&subtotal=${cart.subtotal}`).then(({ data }) => setAvailCoupons(data)).catch(() => setAvailCoupons([]));
   }, [location, today, cart.subtotal]);
 
+  const selectedAddress = addresses.find((a) => a.id === addressId);
+  const activePincode = selectedAddress?.pincode || pincode;
+  useEffect(() => {
+    if (!activePincode) { setDeliveryInfo(null); return; }
+    api.get(`/pincodes/check?pincode=${activePincode}`).then(({ data }) => setDeliveryInfo(data)).catch(() => setDeliveryInfo(null));
+  }, [activePincode]);
+
   if (!location) return null;
   if (cart.items.length === 0) {
     return (
@@ -84,7 +92,10 @@ export default function Checkout() {
   const slotData = slotDays[dayIndex] || { slots: [], asap: {} };
   const asapInfo = slotDays[0]?.asap || {};
   const asapCharge = asapInfo.charge || 0;
-  const deliveryCharge = location.delivery_charge || 0;
+  const baseDeliveryCharge = deliveryInfo?.serviceable ? (deliveryInfo.delivery_charge || 0) : (location.delivery_charge || 0);
+  const freeThreshold = deliveryInfo?.free_delivery_threshold;
+  const freeApplied = freeThreshold != null && cart.subtotal >= freeThreshold;
+  const deliveryCharge = freeApplied ? 0 : baseDeliveryCharge;
   const productDiscount = productCoupon?.discount || 0;
   const deliveryDiscount = deliveryCoupon?.discount || 0;
   const extra = deliveryType === "asap" ? asapCharge : 0;
@@ -240,7 +251,7 @@ export default function Checkout() {
                 <div className="flex items-center gap-2"><Clock className="h-5 w-5 text-forest" /><span className="font-medium">Scheduled Slot</span></div>
                 <p className="mt-1 text-xs text-muted-foreground">Pick a convenient delivery window</p>
               </button>
-              {asapInfo.enabled && (
+              {asapInfo.enabled && deliveryInfo?.asap_enabled !== false && (
                 <button
                   data-testid="delivery-asap-option"
                   onClick={() => setDeliveryType("asap")}

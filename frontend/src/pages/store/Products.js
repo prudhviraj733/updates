@@ -93,7 +93,7 @@ function FilterPanel({
 
 export default function Products() {
   const [params, setParams] = useSearchParams();
-  const { location } = useStore();
+  const { location, pincode } = useStore();
   const [categories, setCategories] = useState([]);
   const [allSubs, setAllSubs] = useState([]);
   const [allBrands, setAllBrands] = useState([]);
@@ -119,7 +119,7 @@ export default function Products() {
   useEffect(() => {
     if (!location) return;
     setLoading(true);
-    let url = `/products?location_id=${location.id}`;
+    let url = `/products?location_id=${location.id}${pincode ? `&pincode=${pincode}` : ""}`;
     if (category) url += `&category_id=${category}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     api.get(url).then(({ data }) => {

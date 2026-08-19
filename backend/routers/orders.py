@@ -70,20 +70,25 @@ async def gen_order_number() -> str:
     return f"FG{datetime.now().strftime('%y%m')}{count + 1:05d}"
 
 
-async def _reserve_inventory(items, location_id):
+async def _inv_filter(product_id, pincode, location_id):
+    if pincode and await db.inventory.count_documents({"product_id": product_id, "pincode": pincode}):
+        return {"product_id": product_id, "pincode": pincode}
+    return {"product_id": product_id, "location_id": location_id}
+
+
+async def _reserve_inventory(items, location_id, pincode=None):
     reserved = []
     for it in items:
+        base = await _inv_filter(it["product_id"], pincode, location_id)
         res = await db.inventory.find_one_and_update(
-            {"product_id": it["product_id"], "location_id": location_id,
-             "available_quantity": {"$gte": it["quantity"]}},
+            {**base, "available_quantity": {"$gte": it["quantity"]}},
             {"$inc": {"available_quantity": -it["quantity"], "reserved_quantity": it["quantity"]}},
         )
         if not res:
             for r in reserved:
+                rb = await _inv_filter(r["product_id"], pincode, location_id)
                 await db.inventory.update_one(
-                    {"product_id": r["product_id"], "location_id": location_id},
-                    {"$inc": {"available_quantity": r["quantity"], "reserved_quantity": -r["quantity"]}},
-                )
+                    rb, {"$inc": {"available_quantity": r["quantity"], "reserved_quantity": -r["quantity"]}})
             raise HTTPException(status_code=409, detail=f"{it['name']} is out of stock")
         reserved.append(it)
 
@@ -247,8 +252,8 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         wallet_used = round(min(bal, final_amount), 2)
         final_amount = round(final_amount - wallet_used, 2)
 
-    # Reserve inventory atomically
-    await _reserve_inventory(items, payload.location_id)
+    # Reserve inventory atomically (per-PIN when configured)
+    await _reserve_inventory(items, payload.location_id, pin.get("pincode"))
 
     payment_status = "pending"
     order = {
@@ -259,6 +264,7 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "customer_phone": user.get("phone", ""),
         "location_id": payload.location_id,
         "location_name": location["name"],
+        "pincode": pin.get("pincode"),
         "address": address,
         "items": items,
         "subtotal": round(subtotal, 2),
@@ -387,15 +393,22 @@ async def set_tracking(order_id: str, payload: OrderTrackingInput, admin: dict =
 
 async def _apply_inventory_transition(order, new_status):
     loc = order["location_id"]
+    pincode = order.get("pincode")
+
+    async def filt(pid):
+        if pincode and await db.inventory.count_documents({"product_id": pid, "pincode": pincode}):
+            return {"product_id": pid, "pincode": pincode}
+        return {"product_id": pid, "location_id": loc}
+
     if new_status == "cancelled" and order["status"] != "cancelled":
         for it in order["items"]:
             await db.inventory.update_one(
-                {"product_id": it["product_id"], "location_id": loc},
+                await filt(it["product_id"]),
                 {"$inc": {"available_quantity": it["quantity"], "reserved_quantity": -it["quantity"]}})
     elif new_status == "delivered" and order["status"] != "delivered":
         for it in order["items"]:
             await db.inventory.update_one(
-                {"product_id": it["product_id"], "location_id": loc},
+                await filt(it["product_id"]),
                 {"$inc": {"reserved_quantity": -it["quantity"], "sold_quantity": it["quantity"]}})
 
 

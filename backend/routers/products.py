@@ -15,14 +15,13 @@ def compute_discount(mrp: float, sp: float) -> float:
     return 0
 
 
-async def enrich(product: dict, location_id: Optional[str] = None) -> dict:
+async def enrich(product: dict, location_id: Optional[str] = None, pincode: Optional[str] = None) -> dict:
+    from routers.inventory import resolve_stock
     product["discount_percent"] = compute_discount(product.get("mrp", 0), product.get("selling_price", 0))
-    inv_query = {"product_id": product["id"]}
-    if location_id:
-        inv_query["location_id"] = location_id
-        inv = await db.inventory.find_one(inv_query, {"_id": 0})
-        product["stock"] = inv["available_quantity"] if inv else 0
-        product["in_stock"] = product["stock"] > 0
+    if location_id or pincode:
+        stock, _ = await resolve_stock(product["id"], pincode=pincode, location_id=location_id)
+        product["stock"] = stock
+        product["in_stock"] = stock > 0
     return product
 
 
@@ -32,6 +31,7 @@ async def list_products(
     subcategory_id: Optional[str] = None,
     brand_id: Optional[str] = None,
     location_id: Optional[str] = None,
+    pincode: Optional[str] = None,
     search: Optional[str] = None,
     featured: Optional[bool] = None,
     min_price: Optional[float] = None,
@@ -70,7 +70,13 @@ async def list_products(
             ors.append({"brand_id": {"$in": brand_ids}})
         query["$or"] = ors
     docs = await db.products.find(query, {"_id": 0}).to_list(1000)
-    result = [await enrich(d, location_id) for d in docs]
+    result = [await enrich(d, location_id, pincode) for d in docs]
+    # PIN-level availability: only show products enabled for the selected PIN
+    if pincode:
+        enabled_ids = set(
+            r["product_id"] for r in await db.inventory.find(
+                {"pincode": pincode, "enabled": {"$ne": False}}, {"_id": 0, "product_id": 1}).to_list(5000))
+        result = [p for p in result if p["id"] in enabled_ids]
     if min_discount:
         result = [p for p in result if p.get("discount_percent", 0) >= min_discount]
     if in_stock:
@@ -79,11 +85,11 @@ async def list_products(
 
 
 @router.get("/products/{product_id}")
-async def get_product(product_id: str, location_id: Optional[str] = None):
+async def get_product(product_id: str, location_id: Optional[str] = None, pincode: Optional[str] = None):
     doc = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Product not found")
-    return await enrich(doc, location_id)
+    return await enrich(doc, location_id, pincode)
 
 
 # ---- Admin ----

@@ -25,8 +25,8 @@ export function LocationModal() {
 
   const useServiceableLocation = () => {
     if (result?.serviceable && result.location) {
-      setLocation(result.location);
-      toast.success(`Delivering to ${result.location.name}`);
+      setLocation(result.location, result.pincode);
+      toast.success(`Delivering to ${result.location.name} (${result.pincode})`);
     }
   };
 

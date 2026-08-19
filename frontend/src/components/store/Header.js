@@ -12,7 +12,7 @@ import {
 export function Header() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { location, setLocationModalOpen, cart, setCartOpen } = useStore();
+  const { location, pincode, setLocationModalOpen, cart, setCartOpen } = useStore();
   const [q, setQ] = useState("");
 
   const submitSearch = (e) => {
@@ -36,8 +36,8 @@ export function Header() {
           <MapPin className="h-4 w-4 text-forest" />
           <div className="hidden sm:block">
             <p className="text-[10px] uppercase leading-none text-muted-foreground">Deliver to</p>
-            <p className="max-w-[120px] truncate text-sm font-medium leading-tight">
-              {location ? location.area : "Select area"}
+            <p className="max-w-[140px] truncate text-sm font-medium leading-tight">
+              {location ? `${location.area}${pincode ? ` · ${pincode}` : ""}` : "Select area"}
             </p>
           </div>
           <ChevronDown className="h-3 w-3 text-muted-foreground" />

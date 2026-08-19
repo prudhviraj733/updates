@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 12 (PIN codes + per-PIN delivery + per-PIN inventory) tested end-to-end. Backend: 11/11 pytest cases pass in /app/backend/tests/test_pin_inventory_iter12.py covering /pincodes/check (serviceable/unserviceable), admin PIN list, per-PIN inventory listing, per-PIN summary, PIN isolation (setting stock in 500034 does NOT change 500073), disabling a product for one PIN hides it from /products?pincode= only for that PIN, enable-all for single PIN and all_serviceable, checkout uses per-PIN delivery_charge (verified by mutating PIN charge to 77 and observing order.delivery_charge == 77 with ASAP surcharge additive on top), inventory reservation on order + restore on cancel, unserviceable PIN blocked at address creation (server-side validation). Frontend Playwright verified: LocationModal — unserviceable PIN 999999 shows 'we don't deliver' and 'Shop this area' is hidden; serviceable PIN 500034 shows 'Shop this area', clicking persists pincode=500034 in localStorage and header switches to Hyderabad-Central delivery. Admin PIN Inventory (/admin/inventory) loads, PIN select works (30 rows for 500034), search/status filter present, enable-all-pin & enable-all-serviceable buttons render, per-row enable-toggle-<pid>, stock-input-<pid>, save-stock-<pid> all functional (edited stock 100->55 saved and persisted). Delivery ₹40 badge shows the PIN's charge on the admin page.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Header 'Deliver to' pill", "issues": ["After selecting PIN 500034 the header pill still reads 'Banjara Hills' while the toast confirms 'Hyderabad - Central (500034)'. The parent-location display in the header is technically correct (PIN 500034's parent is Banjara Hills sub-area), but the mismatch with the toast wording can confuse users. Recommend using a single canonical location label."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pin_inventory_iter12.py",
+    "/app/test_reports/pytest/iter12_pin.xml"
+  ],
+  "action_items": [
+    "(Optional) Align header 'Deliver to' label with the toast so both show the same location name after switching PIN.",
+    "(Pre-existing, not iter12) test_combo_edit_iter11.py::test_disallowed_swap_rejected now returns 200 instead of 400 — swap validation may have regressed on packages.price_and_validate_combo; verify allowed alternatives enforcement."
+  ],
+  "critical_code_review_comments": [
+    "routers/products.list_products filters PIN availability AFTER enrich() loops every product. For large catalogs, load enabled_ids first and filter the mongo query with {'id': {'$in': enabled_ids}} to avoid enriching products that will be dropped.",
+    "routers/inventory.list_inventory returns rows only for products.is_active=True but 'configured' flag is derived from inventory presence — a legitimate 'not-yet-configured' state. Consider a Configure toggle in UI so admins understand un-enabled products explicitly (currently Enabled toggle is off by default when inv doc missing).",
+    "routers/orders._reserve_inventory does not fall back or fail if PIN inventory row is missing but location-level exists. _inv_filter switches to location key when 'no PIN doc'. This is safe today (backfill created rows), but silently mixing PIN and location inventory can drift totals; log a warning when falling back.",
+    "routers/pincodes.check_pincode uses pincode.strip() but /admin/pincodes.update_pincode strips only inside PinCodeInput.pincode. Ensure Pydantic model strips consistently to avoid duplicate PIN docs with trailing whitespace.",
+    "routers/addresses._assert_serviceable + create_address auto-overwrite payload.location_id with pin.location_id — behaviour is correct but undocumented; add a note in the API response so frontend knows the corrected location."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pin_inventory_iter12.py"
+  ],
+  "success_rate": {"backend": "100% (11/11 iter12)", "frontend": "100% (LocationModal + AdminInventory flows)"},
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345; Customer customer@test.com / Test@12345",
+  "seed_data_creation": "None. Reused seeded PINs 500034/500073/500082 and customer's saved address.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "PIN + inventory functionality is stable. Use tests/test_pin_inventory_iter12.py as regression. Note pre-existing combo swap validation regression (test_disallowed_swap_rejected) — unrelated to PIN work but worth investigating in packages router. Frontend uses testids inventory-pincode-select, inventory-search, inventory-status-filter, enable-all-pin, enable-all-serviceable, enable-toggle-<pid>, stock-input-<pid>, save-stock-<pid>, pincode-check-input/btn, use-pincode-location."
+}

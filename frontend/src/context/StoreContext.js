@@ -9,6 +9,7 @@ export function StoreProvider({ children }) {
   const { user } = useAuth();
   const [locations, setLocations] = useState([]);
   const [location, setLocationState] = useState(null);
+  const [pincode, setPincodeState] = useState(localStorage.getItem("pincode") || null);
   const [cart, setCart] = useState({ items: [], combos: [], subtotal: 0, count: 0 });
   const [wishlist, setWishlist] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -28,10 +29,18 @@ export function StoreProvider({ children }) {
     });
   }, []);
 
-  const setLocation = (loc) => {
+  const setLocation = (loc, pin = null) => {
     setLocationState(loc);
     localStorage.setItem("location_id", loc.id);
+    if (pin !== null) {
+      setPincodeState(pin || null);
+      if (pin) localStorage.setItem("pincode", pin); else localStorage.removeItem("pincode");
+    }
     setLocationModalOpen(false);
+  };
+  const setPincode = (pin) => {
+    setPincodeState(pin || null);
+    if (pin) localStorage.setItem("pincode", pin); else localStorage.removeItem("pincode");
   };
 
   const refreshCart = useCallback(async () => {
@@ -40,15 +49,15 @@ export function StoreProvider({ children }) {
       return;
     }
     try {
-      const { data } = await api.get(`/cart?location_id=${location.id}`);
+      const { data } = await api.get(`/cart?location_id=${location.id}${pincode ? `&pincode=${pincode}` : ""}`);
       setCart(data);
     } catch {}
-  }, [user, location]);
+  }, [user, location, pincode]);
 
   const addCombo = async (comboId, selections) => {
     if (!requireAuth()) return false;
     try {
-      const { data } = await api.post("/cart/combo", { location_id: location.id, combo_id: comboId, selections });
+      const { data } = await api.post("/cart/combo", { location_id: location.id, pincode, combo_id: comboId, selections });
       setCart(data);
       return true;
     } catch (e) {
@@ -59,7 +68,7 @@ export function StoreProvider({ children }) {
 
   const updateCombo = async (lineId, selections) => {
     try {
-      const { data } = await api.put(`/cart/combo/${lineId}`, { location_id: location.id, selections });
+      const { data } = await api.put(`/cart/combo/${lineId}`, { location_id: location.id, pincode, selections });
       setCart(data);
       return true;
     } catch (e) {
@@ -69,7 +78,7 @@ export function StoreProvider({ children }) {
   };
 
   const removeCombo = async (lineId) => {
-    const { data } = await api.delete(`/cart/combo/${lineId}?location_id=${location.id}`);
+    const { data } = await api.delete(`/cart/combo/${lineId}?location_id=${location.id}${pincode ? `&pincode=${pincode}` : ""}`);
     setCart(data);
   };
 
@@ -103,6 +112,7 @@ export function StoreProvider({ children }) {
       const { data } = await api.post("/cart/items", {
         product_id: product.id,
         location_id: location.id,
+        pincode,
         quantity: qty,
       });
       setCart(data);
@@ -118,6 +128,7 @@ export function StoreProvider({ children }) {
     try {
       const { data } = await api.put(`/cart/items/${productId}`, {
         location_id: location.id,
+        pincode,
         quantity,
       });
       setCart(data);
@@ -127,13 +138,13 @@ export function StoreProvider({ children }) {
   };
 
   const removeItem = async (productId) => {
-    const { data } = await api.delete(`/cart/items/${productId}?location_id=${location.id}`);
+    const { data } = await api.delete(`/cart/items/${productId}?location_id=${location.id}${pincode ? `&pincode=${pincode}` : ""}`);
     setCart(data);
   };
 
   const clearCart = async () => {
     if (!location) return;
-    const { data } = await api.delete(`/cart?location_id=${location.id}`);
+    const { data } = await api.delete(`/cart?location_id=${location.id}${pincode ? `&pincode=${pincode}` : ""}`);
     setCart(data);
   };
 
@@ -152,7 +163,7 @@ export function StoreProvider({ children }) {
   return (
     <StoreContext.Provider
       value={{
-        locations, location, setLocation,
+        locations, location, setLocation, pincode, setPincode,
         cart, refreshCart, addToCart, updateQty, removeItem, clearCart,
         addCombo, updateCombo, removeCombo,
         wishlist, toggleWishlist, refreshWishlist,

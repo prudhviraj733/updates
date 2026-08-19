@@ -205,6 +205,15 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - Swap preserves the current quantity, clamping down only if the replacement has less stock. Existing swap + smart-suggestions unchanged.
 - Cart/checkout/order/inventory reflect final quantities (order reserves each combo item's chosen qty). Verified via curl: Toor Dal→×2 changed only that item; Fortune Oil→0 removed; effective ₹1149 / chosen ₹1331 / savings ₹182; over-stock rejected 409. Frontend compiles clean; steppers render on all items.
 
+## Iteration 14 (2026-06) — PIN-code inventory + PIN-based delivery + availability
+- **Inventory re-keyed to PIN**: `inventory` docs now carry `pincode` + `enabled`; unique index migrated to `(product_id, location_id, pincode)`. `resolve_stock(product_id, pincode, location_id)` prefers PIN-level, falls back to legacy location rows (no data loss). Idempotent seed backfill copies each location's stock into every serviceable PIN.
+- **Admin inventory** (`inventory.py`): `GET /admin/inventory?pincode=` lists every active product per PIN (enabled/stock/reserved/sold/status); `PUT /admin/inventory` upserts by pincode with `enabled`; `POST /admin/inventory/enable-all` bulk-enables for one/many/all serviceable PINs (optional set_stock); `GET /admin/inventory/summary` per-PIN stats. Verified isolation (500034=50 vs 500073=7), per-PIN disable, enable-all.
+- **Customer availability**: `/products?pincode=` returns only products enabled for that PIN, with PIN-level stock (`resolve_stock`). Cart/combo endpoints thread `pincode`; stock checks are PIN-aware.
+- **Orders**: reserve/restore/deliver now key inventory by the address's PIN (falls back to location); order stores `pincode`.
+- **PIN-based delivery charge (checkout)**: Checkout fetches `/pincodes/check` for the selected address's PIN and uses its `delivery_charge` + `free_delivery_threshold` (no more global ₹40); ASAP surcharge stays separate/additive; ASAP option hidden when the PIN disables it. Delivery coupons/stacking untouched.
+- **Frontend**: StoreContext tracks `pincode` (persisted) and threads it everywhere; LocationModal "Shop this area" sets the PIN; Products lists by PIN; Admin Inventory rebuilt with PIN selector + search + status filter + Enable-All + per-row enable toggle.
+- Serviceability/address/checkout validation (reqs 1/6/7) already enforced server-side and preserved.
+
 ### Remaining / manual config (P2)
 - Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
 - Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').

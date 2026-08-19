@@ -45,7 +45,15 @@ async def on_startup():
     await db.products.create_index("category_id")
     await db.products.create_index("location_ids")
     await db.products.create_index("name")
-    await db.inventory.create_index([("product_id", 1), ("location_id", 1)], unique=True)
+    # Inventory: per-PIN + legacy per-location rows. Migrate old (product_id,location_id) unique index.
+    try:
+        existing_idx = await db.inventory.index_information()
+        if "product_id_1_location_id_1" in existing_idx:
+            await db.inventory.drop_index("product_id_1_location_id_1")
+    except Exception:
+        pass
+    await db.inventory.create_index(
+        [("product_id", 1), ("location_id", 1), ("pincode", 1)], unique=True)
     await db.orders.create_index("user_id")
     await db.orders.create_index("status")
     await db.orders.create_index([("location_id", 1), ("slot_id", 1)])

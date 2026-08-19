@@ -174,31 +174,44 @@ class ProductInput(BaseModel):
 # ---------- Inventory ----------
 class InventoryInput(BaseModel):
     product_id: str
-    location_id: str
+    location_id: Optional[str] = None
+    pincode: Optional[str] = None
     available_quantity: int = 0
     low_stock_threshold: int = 5
+    enabled: bool = True
+
+
+class BulkEnableInput(BaseModel):
+    pincodes: List[str] = []
+    all_serviceable: bool = False
+    enabled: bool = True
+    set_stock: Optional[int] = None
 
 
 # ---------- Cart ----------
 class CartItemInput(BaseModel):
     product_id: str
     location_id: str
+    pincode: Optional[str] = None
     quantity: int = 1
 
 
 class CartUpdateInput(BaseModel):
     location_id: str
+    pincode: Optional[str] = None
     quantity: int
 
 
 class ComboCartInput(BaseModel):
     location_id: str
+    pincode: Optional[str] = None
     combo_id: str
     selections: Dict[str, dict] = {}   # {original_pid: {"product_id": chosen_id, "quantity": q}}
 
 
 class ComboCartUpdateInput(BaseModel):
     location_id: str
+    pincode: Optional[str] = None
     selections: Dict[str, dict] = {}
 
 

@@ -315,6 +315,22 @@ async def seed_catalog_extensions():
     await db.coupons.update_many({"coupon_type": {"$exists": False}},
                                  {"$set": {"coupon_type": "product", "delivery_scope": "both"}})
 
+    # ---- Per-PIN inventory backfill (independent stock per PIN, copied from location) ----
+    all_pins = await db.pincodes.find({}, {"_id": 0}).to_list(5000)
+    for pin in all_pins:
+        loc_id = pin.get("location_id")
+        loc_invs = await db.inventory.find(
+            {"location_id": loc_id, "pincode": {"$exists": False}}, {"_id": 0}).to_list(5000)
+        for inv in loc_invs:
+            if not await db.inventory.find_one({"product_id": inv["product_id"], "pincode": pin["pincode"]}):
+                await db.inventory.insert_one({
+                    "id": gen_id(), "product_id": inv["product_id"], "pincode": pin["pincode"],
+                    "location_id": loc_id, "available_quantity": inv.get("available_quantity", 0),
+                    "reserved_quantity": 0, "sold_quantity": 0,
+                    "low_stock_threshold": inv.get("low_stock_threshold", 5),
+                    "enabled": True, "updated_at": now_iso(),
+                })
+
     # ---- Backfill order item snapshots (cost/category/brand) for analytics ----
     async for order in db.orders.find({}):
         items = order.get("items", [])

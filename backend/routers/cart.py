@@ -1,9 +1,9 @@
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.db import db
 from core.security import get_current_user
 from models import CartItemInput, CartUpdateInput, ComboCartInput, ComboCartUpdateInput, gen_id
+from routers.inventory import resolve_stock
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ async def get_or_create_cart(user_id: str, location_id: str) -> dict:
     return cart
 
 
-async def build_cart_response(user_id: str, location_id: str) -> dict:
+async def build_cart_response(user_id: str, location_id: str, pincode: str = None) -> dict:
     from routers.packages import price_and_validate_combo
     cart = await get_or_create_cart(user_id, location_id)
     items = []
@@ -32,7 +32,8 @@ async def build_cart_response(user_id: str, location_id: str) -> dict:
             if not pkg:
                 continue
             try:
-                priced = await price_and_validate_combo(pkg, it.get("selections", {}), location_id, validate_stock=False)
+                priced = await price_and_validate_combo(pkg, it.get("selections", {}), location_id,
+                                                        validate_stock=False, pincode=pincode)
             except Exception:
                 continue
             combos_effective += priced["effective_price"]
@@ -49,8 +50,7 @@ async def build_cart_response(user_id: str, location_id: str) -> dict:
         product = await db.products.find_one({"id": it["product_id"]}, {"_id": 0})
         if not product or not product.get("is_active"):
             continue
-        inv = await db.inventory.find_one({"product_id": it["product_id"], "location_id": location_id}, {"_id": 0})
-        stock = inv["available_quantity"] if inv else 0
+        stock, _ = await resolve_stock(it["product_id"], pincode=pincode, location_id=location_id)
         line_total = product["selling_price"] * it["quantity"]
         products_subtotal += line_total
         total_mrp += product.get("mrp", product["selling_price"]) * it["quantity"]
@@ -68,6 +68,7 @@ async def build_cart_response(user_id: str, location_id: str) -> dict:
         })
     return {
         "location_id": location_id,
+        "pincode": pincode,
         "items": items,
         "combos": combos,
         "subtotal": round(products_subtotal + combos_effective, 2),
@@ -77,14 +78,13 @@ async def build_cart_response(user_id: str, location_id: str) -> dict:
 
 
 @router.get("/cart")
-async def get_cart(location_id: str, user: dict = Depends(get_current_user)):
-    return await build_cart_response(user["id"], location_id)
+async def get_cart(location_id: str, pincode: str = None, user: dict = Depends(get_current_user)):
+    return await build_cart_response(user["id"], location_id, pincode)
 
 
 @router.post("/cart/items")
 async def add_item(payload: CartItemInput, user: dict = Depends(get_current_user)):
-    inv = await db.inventory.find_one({"product_id": payload.product_id, "location_id": payload.location_id})
-    stock = inv["available_quantity"] if inv else 0
+    stock, _ = await resolve_stock(payload.product_id, pincode=payload.pincode, location_id=payload.location_id)
     cart = await get_or_create_cart(user["id"], payload.location_id)
     items = cart.get("items", [])
     existing = next((i for i in items if i.get("product_id") == payload.product_id), None)
@@ -96,7 +96,7 @@ async def add_item(payload: CartItemInput, user: dict = Depends(get_current_user
     else:
         items.append({"product_id": payload.product_id, "quantity": payload.quantity})
     await db.carts.update_one({"user_id": user["id"], "location_id": payload.location_id}, {"$set": {"items": items}})
-    return await build_cart_response(user["id"], payload.location_id)
+    return await build_cart_response(user["id"], payload.location_id, payload.pincode)
 
 
 @router.put("/cart/items/{product_id}")
@@ -106,8 +106,7 @@ async def update_item(product_id: str, payload: CartUpdateInput, user: dict = De
     if payload.quantity <= 0:
         items = [i for i in items if i.get("product_id") != product_id]
     else:
-        inv = await db.inventory.find_one({"product_id": product_id, "location_id": payload.location_id})
-        stock = inv["available_quantity"] if inv else 0
+        stock, _ = await resolve_stock(product_id, pincode=payload.pincode, location_id=payload.location_id)
         if payload.quantity > stock:
             raise HTTPException(status_code=409, detail=f"Only {stock} in stock")
         found = next((i for i in items if i.get("product_id") == product_id), None)
@@ -116,15 +115,15 @@ async def update_item(product_id: str, payload: CartUpdateInput, user: dict = De
         else:
             items.append({"product_id": product_id, "quantity": payload.quantity})
     await db.carts.update_one({"user_id": user["id"], "location_id": payload.location_id}, {"$set": {"items": items}})
-    return await build_cart_response(user["id"], payload.location_id)
+    return await build_cart_response(user["id"], payload.location_id, payload.pincode)
 
 
 @router.delete("/cart/items/{product_id}")
-async def remove_item(product_id: str, location_id: str, user: dict = Depends(get_current_user)):
+async def remove_item(product_id: str, location_id: str, pincode: str = None, user: dict = Depends(get_current_user)):
     cart = await get_or_create_cart(user["id"], location_id)
     items = [i for i in cart.get("items", []) if i.get("product_id") != product_id]
     await db.carts.update_one({"user_id": user["id"], "location_id": location_id}, {"$set": {"items": items}})
-    return await build_cart_response(user["id"], location_id)
+    return await build_cart_response(user["id"], location_id, pincode)
 
 
 # ---- Combo bundle lines (kept as a single line in the cart) ----
@@ -134,13 +133,13 @@ async def add_combo(payload: ComboCartInput, user: dict = Depends(get_current_us
     pkg = await db.packages.find_one({"id": payload.combo_id, "is_active": True}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Combo not found")
-    await price_and_validate_combo(pkg, payload.selections, payload.location_id, validate_stock=True)
+    await price_and_validate_combo(pkg, payload.selections, payload.location_id, validate_stock=True, pincode=payload.pincode)
     cart = await get_or_create_cart(user["id"], payload.location_id)
     items = cart.get("items", [])
     items.append({"line_id": gen_id(), "type": "combo",
                   "combo_id": payload.combo_id, "selections": payload.selections})
     await db.carts.update_one({"user_id": user["id"], "location_id": payload.location_id}, {"$set": {"items": items}})
-    return await build_cart_response(user["id"], payload.location_id)
+    return await build_cart_response(user["id"], payload.location_id, payload.pincode)
 
 
 @router.put("/cart/combo/{line_id}")
@@ -154,21 +153,21 @@ async def update_combo(line_id: str, payload: ComboCartUpdateInput, user: dict =
     pkg = await db.packages.find_one({"id": line["combo_id"], "is_active": True}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Combo not found")
-    await price_and_validate_combo(pkg, payload.selections, payload.location_id, validate_stock=True)
+    await price_and_validate_combo(pkg, payload.selections, payload.location_id, validate_stock=True, pincode=payload.pincode)
     line["selections"] = payload.selections
     await db.carts.update_one({"user_id": user["id"], "location_id": payload.location_id}, {"$set": {"items": items}})
-    return await build_cart_response(user["id"], payload.location_id)
+    return await build_cart_response(user["id"], payload.location_id, payload.pincode)
 
 
 @router.delete("/cart/combo/{line_id}")
-async def remove_combo(line_id: str, location_id: str, user: dict = Depends(get_current_user)):
+async def remove_combo(line_id: str, location_id: str, pincode: str = None, user: dict = Depends(get_current_user)):
     cart = await get_or_create_cart(user["id"], location_id)
     items = [i for i in cart.get("items", []) if i.get("line_id") != line_id]
     await db.carts.update_one({"user_id": user["id"], "location_id": location_id}, {"$set": {"items": items}})
-    return await build_cart_response(user["id"], location_id)
+    return await build_cart_response(user["id"], location_id, pincode)
 
 
 @router.delete("/cart")
-async def clear_cart(location_id: str, user: dict = Depends(get_current_user)):
+async def clear_cart(location_id: str, pincode: str = None, user: dict = Depends(get_current_user)):
     await db.carts.update_one({"user_id": user["id"], "location_id": location_id}, {"$set": {"items": []}})
-    return await build_cart_response(user["id"], location_id)
+    return await build_cart_response(user["id"], location_id, pincode)
