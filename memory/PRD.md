@@ -214,6 +214,12 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - **Frontend**: StoreContext tracks `pincode` (persisted) and threads it everywhere; LocationModal "Shop this area" sets the PIN; Products lists by PIN; Admin Inventory rebuilt with PIN selector + search + status filter + Enable-All + per-row enable toggle.
 - Serviceability/address/checkout validation (reqs 1/6/7) already enforced server-side and preserved.
 
+## Iteration 15 (2026-06) — Admin permanent side navigation (12 sections)
+- Rebuilt `AdminLayout` sidebar into 12 flat top-level sections (Dashboard, Orders, Analytics, Products, Inventory, Coupons & Discounts, Customers, Delivery/PIN Codes, Combos & Banners, Referrals, Wallet, Settings) with lucide icons, active-route highlighting (incl. child routes), and expandable sub-links per domain. **Inventory is now its own top-level section, separate from Products.** No routes removed.
+- Mobile: sidebar hidden, hamburger (`admin-mobile-menu`) opens a shadcn Sheet drawer with the same nav; tapping navigates + closes. testids: `admin-sidebar`, `nav-<slug>`, `subnav-<slug>`.
+- New Referrals section: backend `GET /admin/referrals` (referrers, referred customers, rewards, anti-self-referral status) + `AdminReferrals` page (`/admin/referrals`) with summary cards, anti-self banner, expandable referrers table.
+- Verified: testing_agent iteration_13 — frontend 100% (all 12 links route correctly, active highlight, sub-link expansion, referrals page, mobile drawer, 21 admin routes regress-clean).
+
 ### Remaining / manual config (P2)
 - Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
 - Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').

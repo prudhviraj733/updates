@@ -46,6 +46,7 @@ import AdminAbandonedCarts from "@/pages/admin/AdminAbandonedCarts";
 import AdminCustomerBehaviour from "@/pages/admin/AdminCustomerBehaviour";
 import AdminPayments from "@/pages/admin/AdminPayments";
 import AdminSettings from "@/pages/admin/AdminSettings";
+import AdminReferrals from "@/pages/admin/AdminReferrals";
 
 function App() {
   return (
@@ -101,6 +102,7 @@ function App() {
                 <Route path="customer-behaviour" element={<AdminCustomerBehaviour />} />
                 <Route path="abandoned-carts" element={<AdminAbandonedCarts />} />
                 <Route path="wallet-management" element={<AdminWalletManagement />} />
+                <Route path="referrals" element={<AdminReferrals />} />
                 <Route path="payments" element={<AdminPayments />} />
                 <Route path="settings" element={<AdminSettings />} />
               </Route>
