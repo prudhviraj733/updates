@@ -33,8 +33,9 @@ function Section({ title, link, linkLabel, children, testid }) {
 
 export default function AdminDashboard() {
   const [d, setD] = useState(null);
+  const [days, setDays] = useState(1);
   const navigate = useNavigate();
-  useEffect(() => { api.get("/admin/dashboard/overview").then(({ data }) => setD(data)).catch(() => setD(false)); }, []);
+  useEffect(() => { api.get(`/admin/dashboard/overview?days=${days}`).then(({ data }) => setD(data)).catch(() => setD(false)); }, [days]);
 
   if (d === null) return <p className="text-slate-400">Loading…</p>;
   if (d === false) return <p className="text-red-500">Failed to load dashboard.</p>;
@@ -42,12 +43,12 @@ export default function AdminDashboard() {
   const t = d.today_summary, tr = d.sales_trend, inv = d.inventory_alerts, cm = d.customer_marketing, fin = d.financial_snapshot;
 
   const todayCards = [
-    { label: "Orders Today", value: t.orders, icon: ShoppingBag, c: "bg-blue-50 text-blue-600" },
-    { label: "Sales Today", value: inr(t.sales), icon: IndianRupee, c: "bg-forest-light text-forest" },
-    { label: "Profit Today", value: inr(t.profit), icon: TrendingUp, c: "bg-emerald-50 text-emerald-600" },
-    { label: "Discounts Today", value: inr(t.discounts), icon: Tag, c: "bg-amber-50 text-amber-600" },
+    { label: "Orders", value: t.orders, icon: ShoppingBag, c: "bg-blue-50 text-blue-600" },
+    { label: "Sales", value: inr(t.sales), icon: IndianRupee, c: "bg-forest-light text-forest" },
+    { label: "Profit", value: inr(t.profit), icon: TrendingUp, c: "bg-emerald-50 text-emerald-600" },
+    { label: "Discounts", value: inr(t.discounts), icon: Tag, c: "bg-amber-50 text-amber-600" },
     { label: "Delivery Collected", value: inr(t.delivery_collected), icon: Truck, c: "bg-purple-50 text-purple-600" },
-    { label: "Refunds Today", value: inr(t.refunds), icon: RotateCcw, c: "bg-red-50 text-red-600" },
+    { label: "Refunds", value: inr(t.refunds), icon: RotateCcw, c: "bg-red-50 text-red-600" },
   ];
 
   const marketing = [
@@ -75,8 +76,17 @@ export default function AdminDashboard() {
       <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
       <p className="text-sm text-slate-500">Quick business overview — real-time from your data</p>
 
-      {/* 1. Today's Summary */}
-      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-6" data-testid="today-summary">
+      {/* 1. Period Summary + date-range toggle (re-scopes the whole dashboard) */}
+      <div className="mt-5 flex items-center justify-between">
+        <h2 className="font-semibold text-slate-900">{d.period || "Today"} Summary</h2>
+        <div className="flex gap-1 rounded-full border bg-white p-1" data-testid="dashboard-range">
+          {[[1, "Today"], [7, "7 Days"], [30, "30 Days"]].map(([v, l]) => (
+            <button key={v} onClick={() => setDays(v)} data-testid={`range-${v}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${days === v ? "bg-forest text-white" : "text-slate-500 hover:text-slate-800"}`}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-6" data-testid="today-summary">
         {todayCards.map((c) => (
           <div key={c.label} className="rounded-2xl border bg-white p-4" data-testid={`today-${c.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
             <div className={`grid h-9 w-9 place-items-center rounded-lg ${c.c}`}><c.icon className="h-4 w-4" /></div>

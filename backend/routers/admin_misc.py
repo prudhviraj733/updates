@@ -12,8 +12,17 @@ def _order_cogs(o: dict) -> float:
     return sum(it.get("cost_price", 0) * it.get("quantity", 1) for it in o.get("items", []))
 
 
+@router.get("/admin/dashboard/alerts")
+async def dashboard_alerts(admin: dict = Depends(require_admin)):
+    return {
+        "pending_orders": await db.orders.count_documents({"status": "pending"}),
+        "low_stock": await db.inventory.count_documents({"available_quantity": {"$lte": 5, "$gt": 0}, "enabled": {"$ne": False}}),
+        "out_of_stock": await db.inventory.count_documents({"available_quantity": {"$lte": 0}, "enabled": {"$ne": False}}),
+    }
+
+
 @router.get("/admin/dashboard/overview")
-async def dashboard_overview(admin: dict = Depends(require_admin)):
+async def dashboard_overview(days: int = None, admin: dict = Depends(require_admin)):
     """Real-data business overview for the admin dashboard (7 sections)."""
     orders = await db.orders.find({}, {"_id": 0}).to_list(20000)
     now = datetime.now(timezone.utc)
@@ -27,19 +36,27 @@ async def dashboard_overview(admin: dict = Depends(require_admin)):
     def since(o, cut):
         return (o.get("created_at") or "") >= cut
 
-    # 1. Today's summary
-    tord = [o for o in orders if valid(o) and since(o, today_iso)]
-    refunds_today = 0.0
+    # Scoped window for period-based sections (whole-dashboard date range)
+    if days and days >= 30:
+        scut, plabel = d30, "Last 30 Days"
+    elif days and days >= 7:
+        scut, plabel = d7, "Last 7 Days"
+    else:
+        scut, plabel = today_iso, "Today"
+    sord = [o for o in orders if valid(o) and since(o, scut)]
+
+    # 1. Period summary (scoped)
+    refunds_scoped = 0.0
     async for l in db.wallet_ledger.find({"reason": "refund"}, {"amount": 1, "created_at": 1, "_id": 0}):
-        if (l.get("created_at") or "") >= today_iso:
-            refunds_today += abs(l.get("amount", 0))
+        if (l.get("created_at") or "") >= scut:
+            refunds_scoped += abs(l.get("amount", 0))
     today_summary = {
-        "orders": len(tord),
-        "sales": round(sum(o.get("final_amount", 0) for o in tord), 2),
-        "profit": round(sum(o.get("final_amount", 0) - _order_cogs(o) for o in tord), 2),
-        "discounts": round(sum(o.get("product_discount", 0) + o.get("combo_discount", 0) + o.get("coupon_discount", 0) for o in tord), 2),
-        "delivery_collected": round(sum(o.get("delivery_charge", 0) + o.get("asap_charge", 0) for o in tord), 2),
-        "refunds": round(refunds_today, 2),
+        "orders": len(sord),
+        "sales": round(sum(o.get("final_amount", 0) for o in sord), 2),
+        "profit": round(sum(o.get("final_amount", 0) - _order_cogs(o) for o in sord), 2),
+        "discounts": round(sum(o.get("product_discount", 0) + o.get("combo_discount", 0) + o.get("coupon_discount", 0) for o in sord), 2),
+        "delivery_collected": round(sum(o.get("delivery_charge", 0) + o.get("asap_charge", 0) for o in sord), 2),
+        "refunds": round(refunds_scoped, 2),
     }
 
     # 2. Live orders by status
@@ -73,11 +90,9 @@ async def dashboard_overview(admin: dict = Depends(require_admin)):
                         key=lambda x: (x["out"], x["low"]), reverse=True)[:8]
     inventory_alerts = {"low_stock": low_stock, "out_of_stock": out_of_stock, "pin_issues": pin_issues}
 
-    # 5. PIN code performance
+    # 5. PIN code performance (scoped)
     perf = {}
-    for o in orders:
-        if not valid(o):
-            continue
+    for o in sord:
         pc = o.get("pincode") or "—"
         m = perf.setdefault(pc, {"pincode": pc, "orders": 0, "sales": 0.0, "delivery": 0.0, "customers": set()})
         m["orders"] += 1
@@ -101,12 +116,12 @@ async def dashboard_overview(admin: dict = Depends(require_admin)):
         "new_customers_7d": await db.users.count_documents({"role": "customer", "created_at": {"$gte": d7}}),
         "cart_abandonment": await db.carts.count_documents({"items.0": {"$exists": True}}),
         "stopped_buying": sum(1 for ca in last_order.values() if ca < d30),
-        "coupon_usage": len([o for o in orders if valid(o) and (o.get("coupon_discount", 0) > 0 or o.get("coupon_code"))]),
+        "coupon_usage": len([o for o in sord if o.get("coupon_discount", 0) > 0 or o.get("coupon_code")]),
         "referral_customers": await db.referrals.count_documents({}),
     }
 
-    # 7. Financial snapshot (all-time)
-    v = [o for o in orders if valid(o)]
+    # 7. Financial snapshot (scoped)
+    v = sord
     net_revenue = sum(o.get("final_amount", 0) for o in v)
     cogs = sum(_order_cogs(o) for o in v)
     wallet_credits = wallet_debits = refunds = 0.0
@@ -139,6 +154,7 @@ async def dashboard_overview(admin: dict = Depends(require_admin)):
                       "status": o.get("status"), "pincode": o.get("pincode")} for o in recent_orders]
 
     return {
+        "period": plabel,
         "today_summary": today_summary,
         "live_orders": live_orders,
         "sales_trend": sales_trend,

@@ -232,6 +232,11 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - Rewrote AdminDashboard.js into responsive cards/grid (compact on mobile) with click-through links to Orders/Inventory/Analytics/Customers/Referrals; Live-Order status chips navigate to `/admin/orders?status=<s>` (AdminOrders now reads the `status` query param). No detailed analytics duplicated — quick overview + links.
 - Verified via curl: all sections return live values (e.g. 30d: 18 orders / ₹24,561 / profit ₹4,691; estimated_profit ₹4,691). Frontend compiles clean.
 
+## Iteration 18 (2026-06) — Sidebar alert badges + dashboard date-range toggle
+- **Sidebar badges**: new `GET /admin/dashboard/alerts` (pending_orders, low_stock, out_of_stock). AdminLayout fetches on mount + every 60s and renders a red count badge on the Orders (pending) and Inventory (low-stock) nav items (`nav-badge-orders`, `nav-badge-inventory`). Verified: pending_orders=7 badge.
+- **Dashboard date range**: `/admin/dashboard/overview?days=` now re-scopes the whole dashboard (period summary, financial snapshot, PIN performance, coupon usage) to Today/7d/30d; response includes `period` label. AdminDashboard has a Today/7 Days/30 Days toggle (`dashboard-range`, `range-1|7|30`) that refetches. Sales Trend still shows all 3 windows. Verified: days=1→Today/₹500, days=30→Last 30 Days/₹24,321.
+- Frontend compiles clean.
+
 ### Remaining / manual config (P2)
 - Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
 - Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingBag, BarChart3, Package, Warehouse, Ticket, Users,
   Truck, Gift, Share2, Wallet, Settings, LogOut, Store, Menu,
 } from "lucide-react";
+import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -76,7 +77,8 @@ function isSectionActive(item, pathname) {
   return (item.match || [item.to]).some((m) => pathname === m || pathname.startsWith(m + "/"));
 }
 
-function SidebarContent({ pathname, onNavigate, navigate, logout }) {
+function SidebarContent({ pathname, onNavigate, navigate, logout, alerts }) {
+  const badgeFor = (to) => (to === "/admin/orders" ? alerts?.pending_orders : to === "/admin/inventory" ? alerts?.low_stock : 0) || 0;
   return (
     <>
       <div className="flex items-center gap-2 border-b border-white/10 px-5 py-4 text-white">
@@ -94,6 +96,7 @@ function SidebarContent({ pathname, onNavigate, navigate, logout }) {
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${active ? "bg-forest text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
               >
                 <item.icon className="h-4 w-4" /> {item.label}
+                {badgeFor(item.to) > 0 && <span data-testid={`nav-badge-${tid(item.label)}`} className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{badgeFor(item.to)}</span>}
               </NavLink>
               {item.children && active && (
                 <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
@@ -125,11 +128,18 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [alerts, setAlerts] = useState(null);
+  useEffect(() => {
+    const load = () => api.get("/admin/dashboard/alerts").then(({ data }) => setAlerts(data)).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   return (
     <div className="admin-scope flex min-h-screen bg-slate-100 font-admin">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-slate-900 text-slate-300 lg:flex" data-testid="admin-sidebar">
-        <SidebarContent pathname={pathname} navigate={navigate} logout={logout} />
+        <SidebarContent pathname={pathname} navigate={navigate} logout={logout} alerts={alerts} />
       </aside>
 
       <div className="flex-1 lg:pl-64">
@@ -140,7 +150,7 @@ export function AdminLayout() {
             </SheetTrigger>
             <SheetContent side="left" className="w-64 border-0 bg-slate-900 p-0 text-slate-300">
               <div className="flex h-full flex-col">
-                <SidebarContent pathname={pathname} navigate={navigate} logout={logout} onNavigate={() => setMobileOpen(false)} />
+                <SidebarContent pathname={pathname} navigate={navigate} logout={logout} alerts={alerts} onNavigate={() => setMobileOpen(false)} />
               </div>
             </SheetContent>
           </Sheet>
