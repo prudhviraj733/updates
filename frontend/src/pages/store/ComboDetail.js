@@ -184,7 +184,8 @@ export default function ComboDetail() {
                   <div className="aspect-square overflow-hidden bg-cream"><img src={alt.images?.[0]} alt={alt.name} className="h-full w-full object-cover" /></div>
                   <div className="p-2">
                     <p className="line-clamp-2 text-xs font-medium">{alt.name}{alt.id === swapOrig?.id ? " (original)" : ""}</p>
-                    <p className="text-sm font-semibold text-forest">{inr(alt.selling_price)}</p>
+                    {alt.recommended && alt.id !== swapOrig?.id && <span className="mt-0.5 inline-block rounded bg-forest/10 px-1.5 py-0.5 text-[10px] font-semibold text-forest">Recommended</span>}
+                    <p className="mt-0.5 text-sm font-semibold text-forest">{inr(alt.selling_price)}</p>
                     {alt.id !== swapOrig?.id && diff !== 0 && <p className={`text-xs font-medium ${diff > 0 ? "text-destructive" : "text-forest"}`}>{diff > 0 ? `+${inr(diff)}` : `-${inr(Math.abs(diff))}`}</p>}
                     {outOfStock && <p className="text-xs text-destructive">Out of stock</p>}
                   </div>

@@ -37,6 +37,49 @@ async def _stock_at(product_id: str, location_id: str):
     return inv["available_quantity"] if inv else 0
 
 
+async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str, limit: int = 8) -> list:
+    """Swap options for a combo item: admin-approved first, then smart same-subcategory /
+    same-category suggestions (each tagged recommended + source)."""
+    cfg = _combo_item_cfg(pkg, pid)
+    if not cfg["swap_allowed"]:
+        return []
+    swaps = pkg.get("swap_options", {}) or {}
+    sub, cat = orig.get("subcategory_id"), orig.get("category_id")
+    seen = {pid}
+    picked = []  # (product_doc, source)
+    for aid in (swaps.get(pid) or []):
+        if aid in seen:
+            continue
+        ap = await db.products.find_one({"id": aid, "is_active": True}, {"_id": 0})
+        if ap:
+            picked.append((ap, "admin")); seen.add(aid)
+
+    async def _gather(query):
+        cur = db.products.find({**query, "is_active": True, "id": {"$nin": list(seen)}}, {"_id": 0}).limit(limit)
+        async for ap in cur:
+            if ap["id"] in seen:
+                continue
+            picked.append((ap, "suggested")); seen.add(ap["id"])
+
+    if sub and len(picked) < limit:
+        await _gather({"subcategory_id": sub})
+    if cat and len(picked) < limit:
+        await _gather({"category_id": cat})
+
+    out = []
+    for ap, source in picked:
+        out.append({
+            "id": ap["id"], "name": ap["name"], "pack_size": ap.get("pack_size", ""),
+            "images": ap.get("images", []), "selling_price": ap.get("selling_price", 0),
+            "mrp": ap.get("mrp", 0), "subcategory_id": ap.get("subcategory_id"),
+            "category_id": ap.get("category_id"), "stock": await _stock_at(ap["id"], location_id),
+            "source": source, "recommended": ap.get("subcategory_id") == sub,
+        })
+    out.sort(key=lambda a: (0 if a["recommended"] else (1 if a.get("category_id") == cat else 2),
+                            0 if a["source"] == "admin" else 1, a.get("selling_price", 0)))
+    return out[:limit]
+
+
 async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str, validate_stock: bool = True) -> dict:
     """Validate customer's combo selections (swaps + quantities) against admin rules,
     check location inventory, and compute the effective bundle price + savings."""
@@ -52,14 +95,17 @@ async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str
         cfg = _combo_item_cfg(pkg, pid)
         sel = selections.get(pid) or {}
         chosen_id = sel.get("product_id") or pid
-        if chosen_id != pid:
-            if not cfg["swap_allowed"] or chosen_id not in (swaps.get(pid) or []):
-                raise HTTPException(status_code=400, detail="Selected replacement is not allowed for this combo")
-        qty = int(sel.get("quantity") or cfg["default_qty"]) if cfg["qty_editable"] else cfg["default_qty"]
-        qty = max(cfg["min_qty"], min(cfg["max_qty"], qty))
         chosen = await db.products.find_one({"id": chosen_id, "is_active": True}, {"_id": 0})
         if not chosen:
             raise HTTPException(status_code=400, detail="A combo item is no longer available")
+        if chosen_id != pid:
+            approved = swaps.get(pid) or []
+            same_group = ((chosen.get("subcategory_id") and chosen.get("subcategory_id") == orig.get("subcategory_id"))
+                          or (chosen.get("category_id") and chosen.get("category_id") == orig.get("category_id")))
+            if not cfg["swap_allowed"] or (chosen_id not in approved and not same_group):
+                raise HTTPException(status_code=400, detail="Selected replacement is not allowed for this combo")
+        qty = int(sel.get("quantity") or cfg["default_qty"]) if cfg["qty_editable"] else cfg["default_qty"]
+        qty = max(cfg["min_qty"], min(cfg["max_qty"], qty))
         stock = await _stock_at(chosen_id, location_id)
         if validate_stock and stock is not None and stock < qty:
             raise HTTPException(status_code=409, detail=f"{chosen['name']} is out of stock")
@@ -110,15 +156,7 @@ async def get_package(package_id: str, location_id: str = None):
         cfg = _combo_item_cfg(pkg, pid)
         p["config"] = cfg
         p["stock"] = await _stock_at(pid, location_id)
-        # admin-approved alternatives, similar first (same subcategory, then category)
-        alts = []
-        for alt_id in (swaps.get(pid) or []):
-            ap = await db.products.find_one({"id": alt_id, "is_active": True}, {"_id": 0})
-            if ap:
-                alts.append(summarize(ap, await _stock_at(alt_id, location_id)))
-        sub, cat = p.get("subcategory_id"), p.get("category_id")
-        alts.sort(key=lambda a: (0 if a.get("subcategory_id") == sub else (1 if a.get("category_id") == cat else 2),
-                                 a.get("selling_price", 0)))
+        alts = await _combo_alternatives(pkg, pid, p, location_id)
         p["alternatives"] = alts
         p["swappable"] = cfg["swap_allowed"] and len(alts) > 0
         products.append(p)

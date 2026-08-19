@@ -192,6 +192,13 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - **Frontend**: ComboDetail rewritten with qty steppers (bounded), swap dialog showing +₹/−₹ + stock, live price/savings, single "Add/Update Combo" → one bundle. CartDrawer shows combo as a collapsible bundle line (Save badge, item list, Edit→`/combo/:id?line=`, Remove). StoreContext gained addCombo/updateCombo/removeCombo.
 - Verified via curl e2e: swap+qty combo → 1 cart line (₹641 = chosen ₹1460 − ₹819 savings); order placed, Kolam inventory 100→98 reserved 2, combo_discount ₹819, delivery ₹40 + ASAP ₹100 separate. Frontend combo page screenshot confirms qty stepper on editable item, none on fixed item.
 
+## Iteration 12 (2026-06) — Combo Smart Swap Picks + swap/edit fix
+- **Bug**: real seeded combos (Monthly Family/Breakfast/Premium Dry Fruits) had no `swap_options`/`item_config`, so no Swap button or qty stepper appeared → "swap/edit not working". 
+- **Fix + feature** (`packages._combo_alternatives`): when swapping is allowed (default true), each item now surfaces admin-approved alternatives first, then smart same-subcategory (then same-category) in-stock suggestions, each tagged `recommended` (same subcategory) + `source` (admin|suggested), sorted recommended→category→admin→price. Items become swappable out-of-the-box.
+- **Validation** (`price_and_validate_combo`): accepts a swap if the chosen product is admin-approved OR shares the original's subcategory/category (with `swap_allowed`); unrelated products rejected 400. Verified via curl: Sona Masoori→Kolam Rice 200 (single line, effective ₹949); unrelated→400.
+- **Frontend**: swap dialog shows a green "Recommended" badge on same-subcategory picks. Also fixed combo update redirect (→ home instead of bouncing checkout), added swap-dialog DialogDescription (a11y), guarded empty hero img src.
+- Verified: real Monthly Family Combo now shows Swap on all 6 items (screenshot); frontend compiles clean.
+
 ### Remaining / manual config (P2)
 - Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
 - Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').
