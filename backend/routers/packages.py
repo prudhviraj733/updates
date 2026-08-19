@@ -104,12 +104,17 @@ async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str
                           or (chosen.get("category_id") and chosen.get("category_id") == orig.get("category_id")))
             if not cfg["swap_allowed"] or (chosen_id not in approved and not same_group):
                 raise HTTPException(status_code=400, detail="Selected replacement is not allowed for this combo")
-        qty = int(sel.get("quantity") or cfg["default_qty"]) if cfg["qty_editable"] else cfg["default_qty"]
-        qty = max(cfg["min_qty"], min(cfg["max_qty"], qty))
-        stock = await _stock_at(chosen_id, location_id)
-        if validate_stock and stock is not None and stock < qty:
-            raise HTTPException(status_code=409, detail=f"{chosen['name']} is out of stock")
         base_value += orig.get("selling_price", 0) * cfg["default_qty"]
+        # customer-controlled quantity: 0 = removed; capped by admin max (if set) and by inventory
+        requested = sel.get("quantity")
+        qty = cfg["default_qty"] if requested is None else max(0, int(requested))
+        if cfg["qty_editable"] and cfg["max_qty"]:
+            qty = min(qty, cfg["max_qty"])
+        stock = await _stock_at(chosen_id, location_id)
+        if validate_stock and stock is not None and qty > stock:
+            raise HTTPException(status_code=409, detail=f"Only {stock} of {chosen['name']} in stock")
+        if qty <= 0:
+            continue
         chosen_value += chosen.get("selling_price", 0) * qty
         line_items.append({
             "original_id": pid, "product_id": chosen_id, "name": chosen["name"],

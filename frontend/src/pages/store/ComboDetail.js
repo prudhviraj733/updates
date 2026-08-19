@@ -61,15 +61,33 @@ export default function ComboDetail() {
   const effectivePrice = Math.max(0, Math.round((chosenValue - savings) * 100) / 100);
   const priceDiff = Math.round((effectivePrice - combo.price) * 100) / 100;
 
-  const setQty = (origId, q) => setSel((s) => {
-    const orig = combo.products.find((p) => p.id === origId);
-    const cfg = orig.config || { min_qty: 1, max_qty: 1 };
-    const clamped = Math.max(cfg.min_qty, Math.min(cfg.max_qty, q));
-    return { ...s, [origId]: { ...s[origId], quantity: clamped } };
+  const changeQty = (origId, delta) => setSel((s) => {
+    const cur = s[origId];
+    if (!cur) return s;
+    const orig = combo.products.find((x) => x.id === origId);
+    const cfg = orig?.config || {};
+    const p = cur.product;
+    const stock = p.stock == null ? Infinity : p.stock;
+    const adminMax = (cfg.qty_editable && cfg.max_qty) ? cfg.max_qty : Infinity;
+    const maxCap = Math.min(stock, adminMax);
+    let q = cur.quantity + delta;
+    if (q < 0) q = 0;
+    if (q > maxCap) {
+      toast.error(p.stock === 0 ? `${p.name} is out of stock` : `Only ${p.stock} of ${p.name} in stock`);
+      q = maxCap === Infinity ? cur.quantity : maxCap;
+    }
+    return { ...s, [origId]: { ...cur, quantity: q } };
   });
 
   const pickAlternative = (originalId, product) => {
-    setSel((s) => ({ ...s, [originalId]: { ...s[originalId], product } }));
+    setSel((s) => {
+      const orig = combo.products.find((x) => x.id === originalId);
+      const curQty = s[originalId]?.quantity ?? (orig?.config?.default_qty ?? 1);
+      let q = curQty;
+      const stock = product.stock == null ? Infinity : product.stock;
+      if (q > stock) { q = stock; toast.info(`Quantity set to ${stock} — max available for ${product.name}`); }
+      return { ...s, [originalId]: { product, quantity: q } };
+    });
     setSwapFor(null);
     toast.success(`Swapped to ${product.name}`);
   };
@@ -132,29 +150,32 @@ export default function ComboDetail() {
       <h2 className="mt-8 font-heading text-2xl font-bold">What's inside</h2>
       <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {combo.products.map((orig) => {
-          const c = sel[orig.id] || { product: orig, quantity: orig.config?.default_qty || 1 };
+          const c = sel[orig.id] || { product: orig, quantity: orig.config?.default_qty ?? 1 };
           const p = c.product;
           const swapped = p.id !== orig.id;
-          const cfg = orig.config || { qty_editable: false, min_qty: 1, max_qty: 1 };
-          const out = p.stock != null && p.stock < c.quantity;
+          const cfg = orig.config || {};
+          const stock = p.stock == null ? Infinity : p.stock;
+          const adminMax = (cfg.qty_editable && cfg.max_qty) ? cfg.max_qty : Infinity;
+          const maxCap = Math.min(stock, adminMax);
+          const removed = c.quantity <= 0;
           return (
-            <div key={orig.id} data-testid={`combo-item-${orig.id}`} className="overflow-hidden rounded-2xl border border-black/5 bg-white text-left">
-              <div className="aspect-square overflow-hidden bg-cream"><img src={p.images?.[0]} alt={p.name} className="h-full w-full object-cover" /></div>
+            <div key={orig.id} data-testid={`combo-item-${orig.id}`} className={`overflow-hidden rounded-2xl border bg-white text-left transition-opacity ${removed ? "border-dashed border-destructive/40 opacity-60" : "border-black/5"}`}>
+              <div className="relative aspect-square overflow-hidden bg-cream">
+                <img src={p.images?.[0]} alt={p.name} className="h-full w-full object-cover" />
+                {removed && <div className="absolute inset-0 grid place-items-center bg-white/70"><span data-testid={`combo-removed-${orig.id}`} className="rounded-full bg-destructive px-2 py-1 text-xs font-semibold text-white">Removed</span></div>}
+              </div>
               <div className="p-3">
                 <p className="text-xs text-muted-foreground">{p.pack_size}</p>
                 <p className="line-clamp-2 text-sm font-medium">{p.name}</p>
                 <p className="mt-1 font-semibold text-forest">{inr(p.selling_price)}</p>
-                {out && <p className="text-xs font-medium text-destructive">Out of stock</p>}
+                {p.stock === 0 && <p className="text-xs font-medium text-destructive">Out of stock</p>}
 
-                {cfg.qty_editable ? (
-                  <div className="mt-2 flex items-center gap-2 rounded-full border px-1 w-fit" data-testid={`combo-qty-${orig.id}`}>
-                    <button className="grid h-6 w-6 place-items-center disabled:opacity-40" disabled={c.quantity <= cfg.min_qty} onClick={() => setQty(orig.id, c.quantity - 1)} data-testid={`combo-qty-dec-${orig.id}`}><Minus className="h-3 w-3" /></button>
-                    <span className="w-5 text-center text-sm font-semibold">{c.quantity}</span>
-                    <button className="grid h-6 w-6 place-items-center disabled:opacity-40" disabled={c.quantity >= cfg.max_qty} onClick={() => setQty(orig.id, c.quantity + 1)} data-testid={`combo-qty-inc-${orig.id}`}><Plus className="h-3 w-3" /></button>
-                  </div>
-                ) : (
-                  c.quantity > 1 && <p className="mt-1 text-xs text-muted-foreground">Qty: {c.quantity}</p>
-                )}
+                <div className="mt-2 flex items-center gap-2 rounded-full border px-1 w-fit" data-testid={`combo-qty-${orig.id}`}>
+                  <button className="grid h-7 w-7 place-items-center disabled:opacity-40" disabled={c.quantity <= 0} onClick={() => changeQty(orig.id, -1)} data-testid={`combo-qty-dec-${orig.id}`}><Minus className="h-3 w-3" /></button>
+                  <span className="w-6 text-center text-sm font-semibold" data-testid={`combo-qty-val-${orig.id}`}>{c.quantity}</span>
+                  <button className="grid h-7 w-7 place-items-center disabled:opacity-40" disabled={c.quantity >= maxCap} onClick={() => changeQty(orig.id, 1)} data-testid={`combo-qty-inc-${orig.id}`}><Plus className="h-3 w-3" /></button>
+                </div>
+                {removed && <p className="mt-1 text-xs font-medium text-destructive">Removed — tap + to add back</p>}
 
                 {orig.swappable && (
                   <button data-testid={`combo-swap-${orig.id}`} onClick={() => setSwapFor(orig.id)} className="mt-2 flex items-center gap-1 text-xs font-medium text-saffron hover:underline">

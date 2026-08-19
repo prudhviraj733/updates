@@ -36,16 +36,14 @@ async def build_cart_response(user_id: str, location_id: str) -> dict:
             except Exception:
                 continue
             combos_effective += priced["effective_price"]
-            sel = {}
             for li in priced["items"]:
                 count += li["quantity"]
-                sel[li["original_id"]] = {"product_id": li["product_id"], "quantity": li["quantity"]}
             combos.append({
                 "line_id": it["line_id"], "type": "combo", "combo_id": pkg["id"],
                 "name": pkg["name"], "image": priced["image"],
                 "base_price": priced["base_price"], "chosen_value": priced["chosen_value"],
                 "savings": priced["savings"], "effective_price": priced["effective_price"],
-                "items": priced["items"], "selections": sel,
+                "items": priced["items"], "selections": it.get("selections", {}),
             })
             continue
         product = await db.products.find_one({"id": it["product_id"]}, {"_id": 0})

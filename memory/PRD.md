@@ -199,6 +199,12 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - **Frontend**: swap dialog shows a green "Recommended" badge on same-subcategory picks. Also fixed combo update redirect (→ home instead of bouncing checkout), added swap-dialog DialogDescription (a11y), guarded empty hero img src.
 - Verified: real Monthly Family Combo now shows Swap on all 6 items (screenshot); frontend compiles clean.
 
+## Iteration 13 (2026-06) — Combo per-item quantity editing (min 0 = remove)
+- Every combo item now has an independent `[−] qty [+]` control on the detail page (no longer gated by admin qty_editable). Min 0; at 0 the item is clearly marked "Removed" (dashed card + badge) and dropped from the bundle.
+- Backend `price_and_validate_combo`: quantity 0..(admin max if set)..inventory; qty>stock → 409 "Only N of X in stock"; qty 0 skips the line (base_value/savings basis kept intact). Changing one item never touches others (per-key selections). Cart now echoes raw selections so removals persist through edit.
+- Swap preserves the current quantity, clamping down only if the replacement has less stock. Existing swap + smart-suggestions unchanged.
+- Cart/checkout/order/inventory reflect final quantities (order reserves each combo item's chosen qty). Verified via curl: Toor Dal→×2 changed only that item; Fortune Oil→0 removed; effective ₹1149 / chosen ₹1331 / savings ₹182; over-stock rejected 409. Frontend compiles clean; steppers render on all items.
+
 ### Remaining / manual config (P2)
 - Personalized coupons hard-typed as 'product' in stacking calc (fine unless a personalized delivery coupon is added).
 - Optional: enforce coupon-type stacking on order create too (currently safe — delivery_coupon_code DB query filters coupon_type='delivery').
