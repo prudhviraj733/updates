@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { MapPin, Plus, Zap, Clock, Wallet, CreditCard, Check } from "lucide-react";
 import api, { inr } from "@/lib/api";
+import { getCurrentPosition, reverseGeocode, geoErrorMessage } from "@/lib/geo";
 import { useStore } from "@/context/StoreContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const EMPTY_ADDR = { label: "Home", full_name: "", phone: "", line1: "", line2: "", city: "", area: "", pincode: "", is_default: false };
+const EMPTY_ADDR = { label: "Home", full_name: "", phone: "", line1: "", line2: "", city: "", area: "", pincode: "", latitude: null, longitude: null, is_default: false };
 
 function loadRazorpay() {
   return new Promise((resolve) => {
@@ -44,6 +45,24 @@ export default function Checkout() {
   const [useWallet, setUseWallet] = useState(false);
   const [availCoupons, setAvailCoupons] = useState([]);
   const [deliveryInfo, setDeliveryInfo] = useState(null);
+  const [locating, setLocating] = useState(false);
+
+  const useCurrentLocation = async () => {
+    setLocating(true);
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      const geo = await reverseGeocode(latitude, longitude);
+      setNewAddr((a) => ({
+        ...a, latitude, longitude,
+        pincode: geo?.pincode || a.pincode,
+        city: geo?.city || a.city,
+        area: geo?.area || a.area,
+        line1: a.line1 || geo?.line1 || "",
+      }));
+      toast.success("Current location captured");
+    } catch (e) { toast.error(geoErrorMessage(e)); }
+    finally { setLocating(false); }
+  };
 
   // Use Asia/Kolkata date so requested slots align with backend IST computation.
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
@@ -409,6 +428,10 @@ export default function Checkout() {
         <DialogContent className="sm:max-w-md" data-testid="address-dialog">
           <DialogHeader><DialogTitle className="font-heading">Add delivery address</DialogTitle></DialogHeader>
           <div className="grid gap-3">
+            <Button type="button" variant="outline" className="w-fit rounded-full" onClick={useCurrentLocation} disabled={locating} data-testid="use-current-location-btn">
+              <MapPin className="mr-1 h-4 w-4" />{locating ? "Locating…" : "Use current location"}
+            </Button>
+            {newAddr.latitude != null && <p className="text-xs text-forest" data-testid="coords-captured">Location captured: {newAddr.latitude.toFixed(5)}, {newAddr.longitude.toFixed(5)}</p>}
             <div className="grid grid-cols-2 gap-3">
               <Input placeholder="Label (Home/Work)" value={newAddr.label} onChange={(e) => setNewAddr({ ...newAddr, label: e.target.value })} />
               <Input placeholder="Full name" data-testid="addr-name" value={newAddr.full_name} onChange={(e) => setNewAddr({ ...newAddr, full_name: e.target.value })} />

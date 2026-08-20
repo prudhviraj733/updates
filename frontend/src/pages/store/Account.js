@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Trash2, Plus, Star, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Trash2, Plus, Star, ShieldCheck, ShieldAlert, MapPin } from "lucide-react";
 import api from "@/lib/api";
+import { getCurrentPosition, reverseGeocode, geoErrorMessage } from "@/lib/geo";
 import { useAuth } from "@/context/AuthContext";
 import { useStore } from "@/context/StoreContext";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const EMPTY = { label: "Home", full_name: "", phone: "", line1: "", line2: "", city: "", area: "", pincode: "", is_default: false };
+const EMPTY = { label: "Home", full_name: "", phone: "", line1: "", line2: "", city: "", area: "", pincode: "", latitude: null, longitude: null, is_default: false };
 
 export default function Account() {
   const { user, updateProfile, refresh } = useAuth();
@@ -25,6 +26,24 @@ export default function Account() {
   const [addresses, setAddresses] = useState([]);
   const [addrOpen, setAddrOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY, location_id: "" });
+  const [locating, setLocating] = useState(false);
+
+  const useCurrentLocation = async () => {
+    setLocating(true);
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      const geo = await reverseGeocode(latitude, longitude);
+      setForm((a) => ({
+        ...a, latitude, longitude,
+        pincode: geo?.pincode || a.pincode,
+        city: geo?.city || a.city,
+        area: geo?.area || a.area,
+        line1: a.line1 || geo?.line1 || "",
+      }));
+      toast.success("Current location captured");
+    } catch (e) { toast.error(geoErrorMessage(e)); }
+    finally { setLocating(false); }
+  };
 
   const currentPhone = user && user !== false ? (user.phone || "") : "";
   const phoneVerified = user && user !== false ? !!user.phone_verified : false;
@@ -208,6 +227,10 @@ export default function Account() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle className="font-heading">Add address</DialogTitle></DialogHeader>
           <div className="grid gap-3">
+            <Button type="button" variant="outline" className="w-fit rounded-full" onClick={useCurrentLocation} disabled={locating} data-testid="use-current-location-btn">
+              <MapPin className="mr-1 h-4 w-4" />{locating ? "Locating…" : "Use current location"}
+            </Button>
+            {form.latitude != null && <p className="text-xs text-forest" data-testid="coords-captured">Location captured: {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}</p>}
             <div className="grid grid-cols-2 gap-3">
               <Input placeholder="Label" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
               <Input placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />

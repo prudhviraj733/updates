@@ -64,6 +64,29 @@ class LoginInput(BaseModel):
     password: str
 
 
+class ReturnCreateInput(BaseModel):
+    order_id: str
+    product_id: str
+    quantity: int = 1
+    type: str  # "refund" | "replacement"
+    reason_id: str
+    description: Optional[str] = None
+    photos: List[str] = []
+
+
+class ReturnStatusUpdateInput(BaseModel):
+    status: str
+    note: Optional[str] = None
+    refund_amount: Optional[float] = Field(default=None, gt=0)
+    refund_method: Optional[str] = None
+
+
+class ReturnReasonInput(BaseModel):
+    label: str
+    is_active: bool = True
+    requires_photo: bool = True
+
+
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
@@ -89,6 +112,8 @@ class AddressInput(BaseModel):
     area: Optional[str] = ""
     pincode: str
     location_id: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     is_default: bool = False
 
 

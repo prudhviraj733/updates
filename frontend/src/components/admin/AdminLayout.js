@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingBag, BarChart3, Package, Warehouse, Ticket, Users,
-  Truck, Gift, Share2, Wallet, Settings, LogOut, Store, Menu,
+  Truck, Gift, Share2, Wallet, Settings, LogOut, Store, Menu, RotateCcw,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 const NAV = [
   { icon: LayoutDashboard, label: "Dashboard", to: "/admin", end: true, match: ["/admin"] },
   { icon: ShoppingBag, label: "Orders", to: "/admin/orders", match: ["/admin/orders"] },
+  { icon: RotateCcw, label: "Refunds & Replacements", to: "/admin/returns", match: ["/admin/returns"] },
   { icon: BarChart3, label: "Analytics", to: "/admin/analytics", match: ["/admin/analytics"] },
   {
     icon: Package, label: "Products", to: "/admin/products",
@@ -78,7 +79,7 @@ function isSectionActive(item, pathname) {
 }
 
 function SidebarContent({ pathname, onNavigate, navigate, logout, alerts }) {
-  const badgeFor = (to) => (to === "/admin/orders" ? alerts?.pending_orders : to === "/admin/inventory" ? alerts?.low_stock : 0) || 0;
+  const badgeFor = (to) => (to === "/admin/orders" ? alerts?.pending_orders : to === "/admin/inventory" ? alerts?.low_stock : to === "/admin/returns" ? alerts?.return_requests : 0) || 0;
   return (
     <>
       <div className="flex items-center gap-2 border-b border-white/10 px-5 py-4 text-white">

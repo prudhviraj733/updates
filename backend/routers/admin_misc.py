@@ -18,6 +18,7 @@ async def dashboard_alerts(admin: dict = Depends(require_admin)):
         "pending_orders": await db.orders.count_documents({"status": "pending"}),
         "low_stock": await db.inventory.count_documents({"available_quantity": {"$lte": 5, "$gt": 0}, "enabled": {"$ne": False}}),
         "out_of_stock": await db.inventory.count_documents({"available_quantity": {"$lte": 0}, "enabled": {"$ne": False}}),
+        "return_requests": await db.returns.count_documents({"status": {"$in": ["requested", "under_review"]}}),
     }
 
 

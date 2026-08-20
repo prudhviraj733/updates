@@ -6,7 +6,7 @@ import requests
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response
 
 from core.db import db
-from core.security import require_admin
+from core.security import require_admin, get_current_user
 from models import gen_id, now_iso
 
 logger = logging.getLogger(__name__)
@@ -64,12 +64,11 @@ def get_object(path: str):
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 
-@router.post("/admin/upload")
-async def upload(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+async def _store_image(file: UploadFile, folder: str = "uploads") -> dict:
     ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin").lower()
     if ext not in MIME_TYPES:
         raise HTTPException(status_code=400, detail="Only image files are allowed (jpg, png, webp, gif)")
-    path = f"{APP_NAME}/uploads/{uuid.uuid4()}.{ext}"
+    path = f"{APP_NAME}/{folder}/{uuid.uuid4()}.{ext}"
     data = await file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image must be under 5MB")
@@ -86,6 +85,17 @@ async def upload(file: UploadFile = File(...), admin: dict = Depends(require_adm
         "is_deleted": False, "created_at": now_iso(),
     })
     return {"url": f"{PUBLIC_BASE}/api/files/{stored_path}", "path": stored_path}
+
+
+@router.post("/admin/upload")
+async def upload(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    return await _store_image(file)
+
+
+@router.post("/me/upload")
+async def customer_upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Authenticated customer image upload (e.g. refund/replacement photo evidence)."""
+    return await _store_image(file, folder="returns")
 
 
 @router.get("/files/{path:path}")

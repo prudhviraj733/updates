@@ -53,10 +53,23 @@ export function Orders() {
   );
 }
 
+const IMG_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect width='48' height='48' fill='%23f0ece3'/%3E%3C/svg%3E";
+const RETURN_STATUS_LABELS = {
+  requested: "Requested", under_review: "Under Review", rejected: "Rejected",
+  refund_approved: "Refund Approved", refund_processing: "Refund Processing", refunded: "Refunded",
+  replacement_approved: "Replacement Approved", replacement_scheduled: "Replacement Preparing",
+  replacement_out_for_delivery: "Replacement Out for Delivery", replaced: "Replacement Delivered",
+};
+
 export function OrderDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [order, setOrder] = useState(null);
-  useEffect(() => { api.get(`/orders/${id}`).then(({ data }) => setOrder(data)); }, [id]);
+  const [returns, setReturns] = useState([]);
+  useEffect(() => {
+    api.get(`/orders/${id}`).then(({ data }) => setOrder(data));
+    api.get(`/me/returns?order_id=${id}`).then(({ data }) => setReturns(data)).catch(() => {});
+  }, [id]);
   if (!order) return <div className="mx-auto max-w-3xl px-4 py-8"><Skeleton className="h-96 rounded-2xl" /></div>;
 
   const cancelled = order.status === "cancelled";
@@ -128,7 +141,7 @@ export function OrderDetail() {
         <div className="mt-3 divide-y">
           {order.items.map((i) => (
             <div key={i.product_id} className="flex items-center gap-3 py-3">
-              <img src={i.image} alt={i.name} className="h-12 w-12 rounded-lg object-cover bg-cream" />
+              <img src={i.image || IMG_PLACEHOLDER} alt={i.name} className="h-12 w-12 rounded-lg object-cover bg-cream" />
               <div className="flex-1"><p className="text-sm font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{i.pack_size} · Qty {i.quantity}</p></div>
               <span className="font-medium">{inr(i.line_total)}</span>
             </div>
@@ -144,6 +157,29 @@ export function OrderDetail() {
           <div className="flex justify-between pt-2 text-lg font-bold"><span>Total paid</span><span>{inr(order.final_amount)}</span></div>
         </div>
       </div>
+
+      {/* Refund / Replacement */}
+      {order.status === "delivered" && (
+        <div className="mt-4 rounded-2xl border border-black/5 bg-white p-6" data-testid="return-section">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-heading text-lg font-bold">Issue with an item?</h2>
+              <p className="text-sm text-muted-foreground">Request a refund or replacement for a specific item.</p>
+            </div>
+            <Button className="rounded-full bg-forest hover:bg-forest-dark" onClick={() => navigate(`/orders/${order.id}/return`)} data-testid="refund-replace-btn">Refund / Replace Item</Button>
+          </div>
+          {returns.length > 0 && (
+            <div className="mt-4 space-y-2 border-t pt-4">
+              {returns.map((r) => (
+                <div key={r.id} className="flex items-center justify-between text-sm" data-testid={`my-return-${r.id}`}>
+                  <span>{r.product_name} × {r.quantity} · <span className="capitalize">{r.type}</span></span>
+                  <Badge className={r.status === "rejected" ? "bg-red-100 text-red-700" : ["refunded", "replaced"].includes(r.status) ? "bg-forest-light text-forest" : "bg-amber-100 text-amber-700"}>{RETURN_STATUS_LABELS[r.status] || r.customer_status_label}</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

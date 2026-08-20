@@ -256,3 +256,16 @@ AdminLayout grouped nav: Dashboard, Orders, Catalog & Inventory (Products/Catego
 - **Status timeline** (routers/orders.py): `update_order_status` now enforces forward-only ORDER_FLOW (pending→accepted→confirmed→preparing→ready_for_delivery→out_for_delivery→delivered), rejects backward moves and changes after terminal (delivered/cancelled); same-status calls are no-ops. Each status recorded once (dedupe on write in accept + status, and `_dedupe_history` on read). Cancellation handled separately from any non-terminal state. Frontend status dropdown disables backward/terminal-invalid options.
 - **Snapshot**: orders already snapshot price/discount/coupon/wallet/PIN delivery at placement (admin product changes never mutate existing orders). Added `customer_phone_verified` to the order snapshot; order detail shows a Verified badge for phone, plus service area, PIN code and slot/ASAP.
 - Verified via curl (forward/no-op-dedupe/backward-reject/terminal-reject + financial reconciliation) and a full-page admin screenshot. Test order restored after transition testing (inventory + cashback side-effects reverted).
+
+## Iteration 21 (2026-06) — Refund/Replacement fixes + GPS delivery location
+Refund/Replacement bug fixes (from testing iteration_16):
+- Backend: refund_amount now validated — Pydantic gt=0 (negative→422) and capped at line_amount (over-cap→400). Duplicate guard now scoped by user_id too.
+- Frontend: ReturnFlow clears "Other" description when switching to a non-Other reason; broken empty <img src=''> replaced with placeholder (ReturnFlow + Orders). AdminReturns refund input has min/max + client validation; internal notes can now be added anytime (incl. terminal requests) via a dedicated note box calling POST /admin/returns/{id}/note.
+
+GPS delivery location:
+- AddressInput model gains optional latitude/longitude; addresses & order snapshots persist them automatically (order copies full address doc).
+- New /app/frontend/src/lib/geo.js: getCurrentPosition (permission requested ONLY on explicit "Use current location", not for browsing) + best-effort Nominatim reverseGeocode (auto-fills pincode/city/area, manual fallback).
+- "Use current location" button added to Checkout and Account address dialogs; manual entry preserved. PIN-based serviceability/slots/ASAP logic unchanged.
+- Admin order detail: shows GPS coords + Google Maps (dir destination=lat,lng), Rapido/Maps-app (geo: URI for Android chooser), Copy address, and Call (tel:) actions. Falls back to address-text Google Maps search when coords absent.
+- ANDROID WebView/TWA note: for geolocation to work in the Android app, the app must declare ACCESS_FINE_LOCATION (and ACCESS_COARSE_LOCATION) and the WebView must grant onGeolocationPermissionsShowPrompt over HTTPS. Website works out of the box on HTTPS.
+- Verified: curl (refund caps, address+coords persistence, admin snapshot) + screenshots (admin GPS actions block, Account "Use current location" dialog).

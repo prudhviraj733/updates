@@ -20,6 +20,7 @@ import MyCoupons from "@/pages/store/MyCoupons";
 import Wallet from "@/pages/store/Wallet";
 import Referral from "@/pages/store/Referral";
 import ComboDetail from "@/pages/store/ComboDetail";
+import ReturnFlow from "@/pages/store/ReturnFlow";
 import { Orders, OrderDetail } from "@/pages/store/Orders";
 
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -47,6 +48,7 @@ import AdminCustomerBehaviour from "@/pages/admin/AdminCustomerBehaviour";
 import AdminPayments from "@/pages/admin/AdminPayments";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminReferrals from "@/pages/admin/AdminReferrals";
+import AdminReturns from "@/pages/admin/AdminReturns";
 
 function App() {
   return (
@@ -75,6 +77,7 @@ function App() {
                 <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
                 <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
                 <Route path="/orders/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
+                <Route path="/orders/:id/return" element={<ProtectedRoute><ReturnFlow /></ProtectedRoute>} />
                 <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
               </Route>
 
@@ -82,6 +85,7 @@ function App() {
               <Route path="/admin" element={<ProtectedRoute adminOnly><AdminLayout /></ProtectedRoute>}>
                 <Route index element={<AdminDashboard />} />
                 <Route path="orders" element={<AdminOrders />} />
+                <Route path="returns" element={<AdminReturns />} />
                 <Route path="orders/:id" element={<AdminOrderDetail />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="categories" element={<AdminCategories />} />

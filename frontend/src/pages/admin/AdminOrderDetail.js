@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Truck, Check, ExternalLink, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Truck, Check, ExternalLink, ShieldCheck, Navigation, MapPin, Copy, Phone } from "lucide-react";
 import api, { inr } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,19 @@ export default function AdminOrderDetail() {
     if (s === "cancelled") return false;
     const i = FLOW.indexOf(s);
     return i !== -1 && curIdx !== -1 && i < curIdx;
+  };
+
+  const lat = order.address?.latitude, lng = order.address?.longitude;
+  const hasCoords = typeof lat === "number" && typeof lng === "number";
+  const addressText = [order.address?.line1, order.address?.line2, order.address?.area, order.address?.city, order.pincode || order.address?.pincode].filter(Boolean).join(", ");
+  const mapsUrl = hasCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
+  const rapidoUrl = hasCoords ? `geo:${lat},${lng}?q=${lat},${lng}(Delivery)` : "#";
+  const custPhone = order.customer_phone || order.address?.phone || "";
+  const copyAddress = () => {
+    navigator.clipboard?.writeText(addressText + (hasCoords ? ` (${lat}, ${lng})` : ""));
+    toast.success("Address copied");
   };
 
   return (
@@ -114,6 +127,18 @@ export default function AdminOrderDetail() {
               <p data-testid="order-service-area">Service area: <span className="text-slate-700">{order.location_name}</span></p>
               <p data-testid="order-pincode">PIN code: <span className="text-slate-700">{order.pincode || order.address?.pincode || "—"}</span></p>
               <p data-testid="order-delivery">Delivery: <span className="text-slate-700">{order.delivery_type === "asap" ? "ASAP (~2 hrs)" : (order.slot_label || "—")}</span></p>
+            </div>
+            <div className="mt-3 border-t pt-3">
+              <p className="mb-2 text-xs font-medium text-slate-500">Delivery location &amp; actions</p>
+              {hasCoords
+                ? <p className="text-slate-600" data-testid="order-gps">GPS: {lat.toFixed(6)}, {lng.toFixed(6)}</p>
+                : <p className="text-slate-400" data-testid="order-gps-missing">No GPS coordinates — address entered manually</p>}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <a href={mapsUrl} target="_blank" rel="noreferrer" data-testid="btn-google-maps" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><Navigation className="h-3.5 w-3.5" />Google Maps</a>
+                {hasCoords && <a href={rapidoUrl} data-testid="btn-rapido" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><MapPin className="h-3.5 w-3.5" />Rapido / Maps app</a>}
+                <button onClick={copyAddress} data-testid="btn-copy-address" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"><Copy className="h-3.5 w-3.5" />Copy address</button>
+                {custPhone && <a href={`tel:${custPhone}`} data-testid="btn-call-customer" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium text-forest hover:bg-slate-50"><Phone className="h-3.5 w-3.5" />Call</a>}
+              </div>
             </div>
           </div>
 

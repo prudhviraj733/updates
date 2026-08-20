@@ -16,7 +16,7 @@ from routers import (
     auth, addresses, locations, categories, products, inventory,
     cart, wishlist, delivery, orders, coupons, payments, packages,
     settings, admin_misc, uploads, combo_banners, personalization,
-    brands, pincodes, analytics, wallet, referral, customers,
+    brands, pincodes, analytics, wallet, referral, customers, returns,
 )
 
 logging.basicConfig(level=logging.INFO,
@@ -34,7 +34,7 @@ async def root():
 for module in (auth, addresses, locations, categories, products, inventory,
                cart, wishlist, delivery, orders, coupons, payments, packages,
                settings, admin_misc, uploads, combo_banners, personalization,
-               brands, pincodes, analytics, wallet, referral, customers):
+               brands, pincodes, analytics, wallet, referral, customers, returns):
     app.include_router(module.router, prefix="/api")
 
 

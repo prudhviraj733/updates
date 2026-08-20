@@ -1,0 +1,55 @@
+{
+  "summary": "Full e2e test of the Refund/Replacement feature. Backend: 18/18 pytest cases pass (reasons list with no change-of-mind entries, photo/Other/ownership/non-delivered validation, duplicate guard, refund->wallet credit + idempotency + terminal lock, replacement PIN inventory reserve->sold, reject flow, reasons CRUD with active-toggle hiding, order integrity). Frontend: customer 5-step flow (item->type->reason->photos->review->submit), real photo upload via /api/me/upload, duplicate-item lock, admin table/dialog/photos/timeline/approve/refund/reject and Eligible Reasons manager all work. TWO HIGH backend defects found: admin refund_amount has no server-side cap (credited Rs.99,999 for a Rs.620 line) and a negative refund_amount DEBITS the customer wallet. All test artifacts were cleaned up (wallet balance restored to 1180.17, TEST-RET-ORDER-1 has zero return requests, Toor Dal PIN inventory restored, TEST_ reasons deleted).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/admin/returns/{id}/status", "issue": "refund_amount is not validated against the request line_amount. Sending refund_amount=99999 on a request with line_amount=620 returned 200 and credited the customer wallet with Rs.99,999. Cap the amount at line_amount (and reject >line_amount).", "priority": "HIGH"},
+      {"endpoint": "PUT /api/admin/returns/{id}/status", "issue": "Negative refund_amount is accepted: refund_amount=-100 returned 200 and DEBITED the wallet (102298.17 -> 102198.17), i.e. a refund can steal customer balance. Validate amount > 0 (Pydantic gt=0 on ReturnStatusUpdateInput.refund_amount).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/admin/returns/{id}/note", "issue": "Endpoint exists and works but is never called by the admin UI (notes can only be added while changing status), so notes cannot be added on terminal requests."},
+      {"endpoint": "POST /api/me/returns", "issue": "Duplicate-active-request guard queries only order_id+product_id (no user_id). Functionally safe today because ownership is enforced earlier, but it silently leaks 'active request exists' state across users if ownership check ever changes."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ReturnFlow (step 2 reason -> step 5 review)", "issue": "The 'Other' explanation text is not cleared when the customer switches back to a non-Other reason. It stays in state, is shown on the Review screen as 'Details' and is submitted/persisted (admin dialog then shows 'Message: TEST_UI other explanation' under reason 'Damaged product'). Clear description when selectedReason.is_other is false.", "selector": "[data-testid='description-input']", "priority": "MEDIUM"},
+      {"component": "ReturnFlow step-item / Orders item list", "issue": "Order items on TEST-RET-ORDER-1 have image='' so <img src=''> renders a broken-image icon and React logs 'An empty string (\"\") was passed to the src attribute' repeatedly. Guard with a placeholder: src={it.image || PLACEHOLDER}.", "selector": "[data-testid^='return-item-'] img", "priority": "MEDIUM"},
+      {"component": "AdminReturns RequestDialog", "issue": "refund-amount-input is a free-form number field with no min/max and no client validation, so an admin can type any value (see backend HIGH issues). Add max={request.line_amount} min=0 plus validation before apply.", "selector": "[data-testid='refund-amount-input']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin /admin/returns dialog", "issues": ["'Photo evidence' column header sits far right of the details column leaving a large empty gap on wide screens (minor layout imbalance)."]},
+      {"screen": "Customer Review step", "issues": ["Uploaded photo thumbnails render in a mostly empty block below the summary rows; no caption/label for the photos section."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_returns_iter16.py",
+    "/app/backend/tests/test_returns_iter16_edge.py",
+    "/app/backend/tests/cleanup_returns_iter16.py",
+    "/app/test_reports/pytest/returns_iter16.xml"
+  ],
+  "action_items": [
+    "Validate refund_amount server-side in PUT /api/admin/returns/{id}/status: must be > 0 and <= request line_amount; also add min/max on the admin refund-amount input.",
+    "Clear the 'Other' description in ReturnFlow when the selected reason is no longer the 'Other' reason so stale text is not submitted.",
+    "Add an image fallback for order-item thumbnails (empty src causes React warnings + broken icons) in ReturnFlow and Orders.",
+    "Optionally surface the existing POST /api/admin/returns/{id}/note endpoint in the admin dialog so notes can be added without a status change."
+  ],
+  "critical_code_review_comments": [
+    "returns.py update_return_status: `amount = payload.refund_amount if ... else r['line_amount']` is used without bounds checks — the only money-moving path in the feature is unvalidated (allows over-refund and wallet debit).",
+    "returns.py duplicate guard should include user_id in the query for defense in depth.",
+    "returns.py mutates `update` after building `set_ops = {'$set': update}` and relies on dict aliasing — works but is fragile; build the $set payload explicitly.",
+    "Idempotency of the wallet credit relies on a $regex match on the ledger `notes` field; a dedicated indexed field (e.g. return_request_id) would be safer/faster."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_returns_iter16.py",
+    "/app/backend/tests/test_returns_iter16_edge.py",
+    "/app/backend/tests/cleanup_returns_iter16.py"
+  ],
+  "success_rate": {"backend": "90% (18/20 cases; the 2 failures are the refund_amount validation defects)", "frontend": "100% of flows executed successfully (3 non-blocking UI defects reported)"},
+  "seed_data_creation": "Created and then deleted refund/replacement requests on TEST-RET-ORDER-1 plus 2 TEST_ reasons; wallet ledger refund entries removed and Toor Dal 520003 inventory restored (available 99, reserved 0, sold 0). Customer wallet balance restored to 1180.17. TEST-RET-ORDER-1 is delivered/5 items/subtotal 4066/final 4106 and currently has NO return requests.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "customer@test.com / Test@12345 ; admin prudhvirajm847@gmail.com / Admin@12345 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Run `python -m pytest tests/test_returns_iter16.py tests/test_returns_iter16_edge.py -v` from /app/backend. The edge file must PASS after the refund_amount validation fix. Always run `python tests/cleanup_returns_iter16.py` afterwards to reset TEST-RET-ORDER-1, the wallet ledger and Toor Dal PIN inventory. Product ids on the order: Basmati 4a46addc-6abc-4d6b-acb4-808512cedb4b(699), Sona c595a83f(620), Kolam a9022134(420), Toor f661723a(155), Moong 8e1a16d9(139). Customer /api/orders is the list endpoint (there is no /api/me/orders). Photo upload through /api/me/upload works against real object storage; a 60x60 png at /tmp/ui_evidence.png was used for the UI test.",
+  "rca_of_the_issue": "update_return_status accepts payload.refund_amount verbatim (`amount = round(float(amount),2)`) with no comparison to r['line_amount'] and no positivity check, and ReturnStatusUpdateInput does not constrain the field. add_wallet_entry then writes the raw amount into wallet_ledger, so a positive over-value inflates the balance and a negative value creates a debit entry. Fix at the Pydantic model (gt=0) and in the router (min(amount, r['line_amount']) or 400)."
+}
