@@ -310,3 +310,10 @@ Platform Usage (Website vs App) — real data only:
 - deploy/.env.example + docker-compose.yml updated with APP_ENV, TWILIO_VERIFY_SERVICE_SID, S3_*, SMTP_*.
 - Verified: CORS env-driven, dev_otp gating, Razorpay full flow + online-refund routing all pass. Readiness rescan = WARN (no hard blockers).
 - STILL NEEDS CREDS: Twilio Verify Service SID (VA...); S3 bucket+keys(+endpoint for R2/Wasabi/Spaces); SMTP host/user/pass (or own Resend/SES). Google Play AAB: no android/ project, no eas.json, no package id yet.
+
+## Iteration 27 (2026-06) — Production credentials configured
+- Razorpay TEST keys updated (rzp_test_TRzm50mOrFMoK9). Full flow test PASS. COD preserved.
+- Twilio Verify configured (Account SID + Auth Token + Verify Service SID VA6a15...). OTP uses Verify; dev_otp never returned (verify_mode). Live send blocked ONLY by Twilio TRIAL account (403: unverified recipient) — verify recipient numbers or upgrade account.
+- Resend email via SMTP (smtp.resend.com:465, user=resend, key in env, from=onboarding@resend.dev). send_email SMTP path succeeds without error; set a verified domain sender for general delivery.
+- Cloudflare R2: endpoint + access key id + bucket 'bestkart' recorded; S3_SECRET_ACCESS_KEY MISSING -> S3_BUCKET left empty so storage stays on working fallback (avoids broken uploads). Provide R2 secret to activate (code already supports via S3_* + endpoint).
+- All secrets in git-ignored backend/.env only; none in source/frontend/logs/responses. No code changed this iteration (env-only).
