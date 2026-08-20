@@ -16,7 +16,7 @@ from routers import (
     auth, addresses, locations, categories, products, inventory,
     cart, wishlist, delivery, orders, coupons, payments, packages,
     settings, admin_misc, uploads, combo_banners, personalization,
-    brands, pincodes, analytics, wallet, referral, customers, returns,
+    brands, pincodes, analytics, wallet, referral, customers, returns, usage,
 )
 
 logging.basicConfig(level=logging.INFO,
@@ -34,7 +34,7 @@ async def root():
 for module in (auth, addresses, locations, categories, products, inventory,
                cart, wishlist, delivery, orders, coupons, payments, packages,
                settings, admin_misc, uploads, combo_banners, personalization,
-               brands, pincodes, analytics, wallet, referral, customers, returns):
+               brands, pincodes, analytics, wallet, referral, customers, returns, usage):
     app.include_router(module.router, prefix="/api")
 
 
@@ -72,6 +72,10 @@ async def on_startup():
     await db.wallet_topups.create_index("razorpay_order_id")
     await db.referrals.create_index("referrer_id")
     await db.users.create_index("referral_code")
+    await db.usage_pings.create_index([("visitor_id", 1), ("platform", 1), ("day", 1)], unique=True)
+    await db.usage_pings.create_index("day")
+    await db.visitors.create_index([("visitor_id", 1), ("platform", 1)], unique=True)
+    await db.orders.create_index("platform")
     await run_seed()
     try:
         from routers.uploads import init_storage

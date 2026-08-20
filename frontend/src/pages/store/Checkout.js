@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { MapPin, Plus, Zap, Clock, Wallet, CreditCard, Check } from "lucide-react";
 import api, { inr } from "@/lib/api";
 import { getCurrentPosition, reverseGeocode, geoErrorMessage } from "@/lib/geo";
+import { MapPicker } from "@/components/store/MapPicker";
 import { useStore } from "@/context/StoreContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -432,6 +433,8 @@ export default function Checkout() {
               <MapPin className="mr-1 h-4 w-4" />{locating ? "Locating…" : "Use current location"}
             </Button>
             {newAddr.latitude != null && <p className="text-xs text-forest" data-testid="coords-captured">Location captured: {newAddr.latitude.toFixed(5)}, {newAddr.longitude.toFixed(5)}</p>}
+            <MapPicker lat={newAddr.latitude} lng={newAddr.longitude} onChange={(la, lo) => setNewAddr((a) => ({ ...a, latitude: la, longitude: lo }))} />
+            <p className="text-xs text-muted-foreground">Drag the pin to fine-tune the exact drop point.</p>
             <div className="grid grid-cols-2 gap-3">
               <Input placeholder="Label (Home/Work)" value={newAddr.label} onChange={(e) => setNewAddr({ ...newAddr, label: e.target.value })} />
               <Input placeholder="Full name" data-testid="addr-name" value={newAddr.full_name} onChange={(e) => setNewAddr({ ...newAddr, full_name: e.target.value })} />

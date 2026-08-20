@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from core.db import db
 from core.security import get_current_user, require_admin
+from core.platform import client_platform
 from models import OrderInput, OrderStatusUpdate, OrderTrackingInput, gen_id, now_iso
 from routers.delivery import get_settings, compute_slots
 from routers.coupons import _calc_discount, _calc_delivery_discount
@@ -110,7 +111,7 @@ async def _reserve_inventory(items, location_id, pincode=None):
 
 
 @router.post("/orders")
-async def create_order(payload: OrderInput, user: dict = Depends(get_current_user)):
+async def create_order(payload: OrderInput, request: Request, user: dict = Depends(get_current_user)):
     cart = await db.carts.find_one({"user_id": user["id"], "location_id": payload.location_id})
     if not cart or not cart.get("items"):
         raise HTTPException(status_code=400, detail="Cart is empty")
@@ -283,6 +284,7 @@ async def create_order(payload: OrderInput, user: dict = Depends(get_current_use
         "location_name": location["name"],
         "pincode": pin.get("pincode"),
         "address": address,
+        "platform": client_platform(request),
         "items": items,
         "subtotal": round(subtotal, 2),
         "product_discount": product_discount,

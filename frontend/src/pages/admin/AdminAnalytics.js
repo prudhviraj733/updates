@@ -13,6 +13,7 @@ const TABS = [
   ["sales", "Sales"], ["products", "Product Analytics"], ["carts", "Cart & Abandonment"],
   ["profitability", "Profitability"], ["discounts", "Discounts"], ["coupons", "Coupon Analytics"],
   ["referrals", "Referral Analytics"], ["wallet", "Wallet Analytics"], ["payments", "Payment Analytics"],
+  ["platform", "Website vs App"],
   ["reports", "Financial Reports"],
 ];
 
@@ -49,6 +50,10 @@ export default function AdminAnalytics() {
   const [payments, setPayments] = useState(null);
   const [referrals, setReferrals] = useState(null);
   const [walletA, setWalletA] = useState(null);
+  const [platform, setPlatform] = useState(null);
+  const [prange, setPrange] = useState("30");
+  const [pstart, setPstart] = useState("");
+  const [pend, setPend] = useState("");
   const [expenses, setExpenses] = useState({ expenses: [], total: 0 });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", category: "operations", amount: 0, notes: "" });
@@ -70,6 +75,14 @@ export default function AdminAnalytics() {
     catch (e) { toast.error(e.response?.data?.detail || "Error"); }
   };
   const delExpense = async (id) => { await api.delete(`/admin/expenses/${id}`); loadExpenses(); };
+
+  useEffect(() => {
+    if (tab !== "platform") return;
+    let qs = "";
+    if (prange === "custom") { if (pstart && pend) qs = `?start=${pstart}&end=${pend}`; }
+    else qs = `?days=${prange === "today" ? 0 : prange}`;
+    api.get(`/admin/analytics/platform${qs}`).then(({ data }) => setPlatform(data)).catch(() => {});
+  }, [tab, prange, pstart, pend]);
 
   return (
     <div data-testid="admin-analytics">
@@ -162,6 +175,54 @@ export default function AdminAnalytics() {
         )}
 
         {tab === "payments" && payments && <Table title="Payments by Method" rows={payments.by_method} cols={[["method", "Method"], ["count", "Orders"], ["revenue", "Revenue", inr]]} />}
+
+        {tab === "platform" && (
+          <div data-testid="platform-analytics">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {[["today", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["custom", "Custom"]].map(([k, l]) => (
+                <button key={k} onClick={() => setPrange(k)} data-testid={`prange-${k}`}
+                  className={`rounded-full border px-3 py-1 text-sm ${prange === k ? "border-forest bg-forest text-white" : ""}`}>{l}</button>
+              ))}
+              {prange === "custom" && (
+                <div className="flex items-center gap-2">
+                  <Input type="date" value={pstart} onChange={(e) => setPstart(e.target.value)} className="h-8 w-40" data-testid="pstart" />
+                  <span className="text-slate-400">to</span>
+                  <Input type="date" value={pend} onChange={(e) => setPend(e.target.value)} className="h-8 w-40" data-testid="pend" />
+                </div>
+              )}
+              {platform && <span className="text-xs text-slate-400">{platform.period}</span>}
+            </div>
+
+            {platform && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Stat label="Registered Customers" value={platform.registered_total} accent="text-forest" />
+                  <Stat label="Active Users" value={platform.active_users} sub="in period" />
+                  <Stat label="Unique Visitors" value={platform.unique_visitors} sub="web + app" />
+                  <Stat label="New Customers" value={platform.website.new_users + platform.app.new_users} sub={`${platform.website.new_users} web · ${platform.app.new_users} app`} />
+                </div>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  {[["Website", platform.website, "web"], ["Android App", platform.app, "app"]].map(([title, d, key]) => (
+                    <div key={key} className="rounded-xl border bg-white p-5" data-testid={`platform-card-${key}`}>
+                      <h3 className="text-lg font-bold">{title}</h3>
+                      <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+                        <div><p className="text-2xl font-bold text-forest" data-testid={`${key}-users`}>{d.users}</p><p className="text-xs text-slate-400">Users</p></div>
+                        <div><p className="text-2xl font-bold" data-testid={`${key}-orders`}>{d.orders}</p><p className="text-xs text-slate-400">Orders</p></div>
+                        <div><p className="text-2xl font-bold" data-testid={`${key}-revenue`}>{inr(d.revenue)}</p><p className="text-xs text-slate-400">Revenue</p></div>
+                      </div>
+                      <div className="mt-4 grid grid-cols-3 gap-3 border-t pt-3 text-center text-sm">
+                        <div><p className="font-semibold">{d.new_users}</p><p className="text-xs text-slate-400">New</p></div>
+                        <div><p className="font-semibold">{d.unique_visitors}</p><p className="text-xs text-slate-400">Visitors</p></div>
+                        <div><p className="font-semibold">{d.returning_visitors}</p><p className="text-xs text-slate-400">Returning</p></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {tab === "reports" && ov && (
           <div>

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Trash2, Plus, Star, ShieldCheck, ShieldAlert, MapPin } from "lucide-react";
 import api from "@/lib/api";
 import { getCurrentPosition, reverseGeocode, geoErrorMessage } from "@/lib/geo";
+import { MapPicker } from "@/components/store/MapPicker";
 import { useAuth } from "@/context/AuthContext";
 import { useStore } from "@/context/StoreContext";
 import { Button } from "@/components/ui/button";
@@ -231,6 +232,8 @@ export default function Account() {
               <MapPin className="mr-1 h-4 w-4" />{locating ? "Locating…" : "Use current location"}
             </Button>
             {form.latitude != null && <p className="text-xs text-forest" data-testid="coords-captured">Location captured: {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}</p>}
+            <MapPicker lat={form.latitude} lng={form.longitude} onChange={(la, lo) => setForm((a) => ({ ...a, latitude: la, longitude: lo }))} />
+            <p className="text-xs text-muted-foreground">Drag the pin to fine-tune the exact drop point.</p>
             <div className="grid grid-cols-2 gap-3">
               <Input placeholder="Label" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
               <Input placeholder="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />

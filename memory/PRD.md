@@ -269,3 +269,14 @@ GPS delivery location:
 - Admin order detail: shows GPS coords + Google Maps (dir destination=lat,lng), Rapido/Maps-app (geo: URI for Android chooser), Copy address, and Call (tel:) actions. Falls back to address-text Google Maps search when coords absent.
 - ANDROID WebView/TWA note: for geolocation to work in the Android app, the app must declare ACCESS_FINE_LOCATION (and ACCESS_COARSE_LOCATION) and the WebView must grant onGeolocationPermissionsShowPrompt over HTTPS. Website works out of the box on HTTPS.
 - Verified: curl (refund caps, address+coords persistence, admin snapshot) + screenshots (admin GPS actions block, Account "Use current location" dialog).
+
+## Iteration 22 (2026-06) — Map Pin Confirm + Website-vs-App Platform Analytics
+Map Pin Confirm:
+- New /app/frontend/src/components/store/MapPicker.jsx (plain Leaflet, React 19 safe; OSM tiles, CDN marker assets). Draggable pin + click-to-move updates address latitude/longitude; embedded in Checkout & Account add-address dialogs with "Drag the pin to fine-tune the exact drop point." Coords persist to address & order snapshot (from Iteration 21).
+
+Platform Usage (Website vs App) — real data only:
+- core/platform.py: client_platform() detects app via X-Client-Platform header (frontend), X-Requested-With (Android WebView package) or UA hints; else web. record_ping() writes deduped (visitor, platform, day) rows.
+- routers/usage.py: POST /usage/track (public, deduped) + GET /admin/analytics/platform (days/start/end filters). Metrics from real data: registered_total, active_users, unique_visitors, per-platform users/orders/revenue/new_users/returning_visitors.
+- Orders now snapshot `platform`; register stores `signup_platform`; login records a ping + last_platform. Frontend: lib/platform.js (detectPlatform + visitor id), api.js interceptors add X-Client-Platform/X-Visitor-Id to all calls, App.js fires /usage/track once per platform/day (deduped in localStorage). AdminAnalytics adds a "Website vs App" tab (date filter + summary + 2 comparison cards).
+- Android note: the TWA/WebView app should set localStorage.platform="app" (or open ?platform=app) OR the WebView sends X-Requested-With package → identified as APP; normal browsers → WEBSITE. Same customer across platforms stays ONE user; orders/usage attributed per platform.
+- Verified: curl (web/app detection incl. X-Requested-With, per-day dedupe, analytics attribution app ₹800/1 order vs web, signup_platform=app) + screenshots (platform tab, map picker). Services clean; existing auth/orders/analytics untouched.

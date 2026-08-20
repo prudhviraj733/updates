@@ -60,10 +60,11 @@ def _hash_otp(otp: str) -> str:
 
 
 @router.post("/auth/register")
-async def register(payload: RegisterInput, response: Response):
+async def register(payload: RegisterInput, request: Request, response: Response):
     email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
+    from core.platform import client_platform
     doc = {
         "name": payload.name,
         "email": email,
@@ -71,6 +72,8 @@ async def register(payload: RegisterInput, response: Response):
         "password_hash": hash_password(payload.password),
         "role": "customer",
         "wishlist": [],
+        "signup_platform": client_platform(request),
+        "last_platform": client_platform(request),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     res = await db.users.insert_one(doc)
@@ -118,6 +121,11 @@ async def login(payload: LoginInput, request: Request, response: Response):
 
     await db.login_attempts.delete_one({"identifier": identifier})
     uid = str(user["_id"])
+    from core.platform import record_ping
+    platform = await record_ping(request, uid)
+    await db.users.update_one({"_id": user["_id"]},
+                              {"$set": {"last_platform": platform,
+                                        "last_active_at": datetime.now(timezone.utc).isoformat()}})
     set_auth_cookies(response, create_access_token(uid, email, user["role"]),
                      create_refresh_token(uid))
     return {"id": uid, "name": user["name"], "email": email,

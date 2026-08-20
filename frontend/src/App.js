@@ -1,6 +1,9 @@
 import "@/App.css";
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
+import api from "@/lib/api";
+import { detectPlatform } from "@/lib/platform";
 
 import { AuthProvider } from "@/context/AuthContext";
 import { StoreProvider } from "@/context/StoreContext";
@@ -51,6 +54,15 @@ import AdminReferrals from "@/pages/admin/AdminReferrals";
 import AdminReturns from "@/pages/admin/AdminReturns";
 
 function App() {
+  useEffect(() => {
+    try {
+      const p = detectPlatform();
+      const key = `tracked:${p}:${new Date().toISOString().slice(0, 10)}`;
+      if (!localStorage.getItem(key)) {
+        api.post("/usage/track").then(() => localStorage.setItem(key, "1")).catch(() => {});
+      }
+    } catch (e) { /* noop */ }
+  }, []);
   return (
     <div className="App">
       <AuthProvider>
