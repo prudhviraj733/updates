@@ -26,23 +26,36 @@ services:
       MONGO_URL: ${MONGO_URL}
       DB_NAME: ${DB_NAME}
       JWT_SECRET: ${JWT_SECRET}
+      APP_ENV: ${APP_ENV}
       CORS_ORIGINS: ${CORS_ORIGINS}
       FRONTEND_URL: ${FRONTEND_URL}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      # Emergent-managed integrations (email / LLM / object storage).
-      # See README "Self-hosting caveats" — may need replacement off-platform.
+      # Emergent-managed integrations (fallback only if S3/SMTP unset)
       EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY}
       EMERGENT_EMAIL_KEY: ${EMERGENT_EMAIL_KEY}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
       EMAIL_REPLY_TO: ${EMAIL_REPLY_TO}
-      # Payments (Razorpay) — leave blank to run in COD-only / graceful-fallback mode
+      # Object storage (S3-compatible)
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      # Email (production SMTP)
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      # Payments (Razorpay)
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
-      # SMS (Twilio) — leave blank to run in dev/no-op mode
+      # SMS OTP (Twilio Verify)
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
     expose:
       - "8001"

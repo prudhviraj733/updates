@@ -17,6 +17,7 @@ import jwt
 
 router = APIRouter()
 
+APP_ENV = os.environ.get("APP_ENV", "development").lower()
 MAX_ATTEMPTS = 5
 LOCK_MINUTES = 15
 
@@ -221,10 +222,14 @@ async def send_phone_otp(payload: PhoneOtpSendInput, user: dict = Depends(get_cu
         window_start = now.isoformat()
 
     otp = f"{random.randint(0, 999999):06d}"
+    from routers.notifications import send_sms, twilio_verify_enabled, verify_start
+    verify_mode = twilio_verify_enabled()
     await db.phone_otps.update_one(
         {"user_id": user["id"]},
         {"$set": {
-            "user_id": user["id"], "phone": phone, "otp_hash": _hash_otp(otp),
+            "user_id": user["id"], "phone": phone,
+            "otp_hash": None if verify_mode else _hash_otp(otp),
+            "mode": "verify" if verify_mode else "local",
             "expires_at": (now + timedelta(minutes=OTP_TTL_MINUTES)).isoformat(),
             "attempts": 0, "last_sent_at": now.isoformat(),
             "send_count": send_count + 1, "window_start": window_start,
@@ -232,7 +237,16 @@ async def send_phone_otp(payload: PhoneOtpSendInput, user: dict = Depends(get_cu
         upsert=True,
     )
 
-    from routers.notifications import send_sms
+    if verify_mode:
+        # Twilio Verify sends & stores the code server-side (production).
+        try:
+            await verify_start(phone)
+        except Exception:
+            await db.phone_otps.delete_one({"user_id": user["id"]})
+            raise HTTPException(status_code=503, detail="OTP service is temporarily unavailable. Please try again.")
+        return {"status": "sent", "phone": phone, "expires_in": OTP_TTL_MINUTES * 60,
+                "message": f"An OTP has been sent to {phone}."}
+
     try:
         await send_sms(phone, f"Your Freshly verification code is {otp}. Valid for {OTP_TTL_MINUTES} minutes.")
     except Exception:
@@ -241,10 +255,10 @@ async def send_phone_otp(payload: PhoneOtpSendInput, user: dict = Depends(get_cu
     resp = {"status": "sent", "phone": phone,
             "expires_in": OTP_TTL_MINUTES * 60,
             "message": f"An OTP has been sent to {phone}."}
-    if not _twilio_configured():
-        # Dev-mode fallback: SMS isn't configured, expose the code so it stays testable.
+    # Dev-only fallback: expose the code ONLY when NOT production AND SMS not configured.
+    if not _twilio_configured() and APP_ENV != "production":
         resp["dev_otp"] = otp
-        resp["message"] = f"SMS is not configured. Dev OTP for {phone}: {otp}"
+        resp["message"] = f"SMS is not configured (dev). Dev OTP for {phone}: {otp}"
     return resp
 
 
@@ -265,7 +279,16 @@ async def verify_phone_otp(payload: PhoneOtpVerifyInput, user: dict = Depends(ge
         await db.phone_otps.delete_one({"user_id": user["id"]})
         raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please request a new code.")
 
-    if _hash_otp(otp) != rec.get("otp_hash"):
+    if rec.get("mode") == "verify":
+        from routers.notifications import verify_check
+        try:
+            ok = await verify_check(phone, otp)
+        except Exception:
+            raise HTTPException(status_code=503, detail="OTP service is temporarily unavailable. Please try again.")
+        if not ok:
+            await db.phone_otps.update_one({"user_id": user["id"]}, {"$inc": {"attempts": 1}})
+            raise HTTPException(status_code=400, detail="Incorrect OTP. Please try again.")
+    elif _hash_otp(otp) != rec.get("otp_hash"):
         await db.phone_otps.update_one({"user_id": user["id"]}, {"$inc": {"attempts": 1}})
         raise HTTPException(status_code=400, detail="Incorrect OTP. Please try again.")
 

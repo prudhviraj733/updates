@@ -300,3 +300,13 @@ Platform Usage (Website vs App) — real data only:
 - Checkout UX fixes from iteration_17: Razorpay prefill now sends {name, email(user.email), contact=10-digit}; added modal.ondismiss (cancel -> toast + go to order) and rz.on('payment.failed') handler.
 - Tests: backend/tests/test_razorpay_flow.py, test_refund_routing.py (wallet path), test_online_refund_branch.py (online path) all pass.
 - BACKLOG from iteration_17: auto-cancel/expire orphan unpaid online orders (each abandoned popup leaves a pending order); client-side min-order + PIN validation before pay; empty <img src=""> in cart/order thumbnails (LOW); combo 'Swap Test Combo' Rs.0 leftover line in cart.
+
+## Iteration 26 (2026-06) — Production hardening (Twilio Verify, S3, CORS, SMTP)
+- OTP: auth.py now uses Twilio Verify when TWILIO_ACCOUNT_SID+AUTH_TOKEN+VERIFY_SERVICE_SID set (verify_start/verify_check in notifications.py). dev_otp is returned ONLY when APP_ENV!=production AND SMS unconfigured -> never leaks in prod. Verify-mode verify-otp uses Twilio verification_checks. Set Twilio Account SID + Auth Token in backend/.env; TWILIO_VERIFY_SERVICE_SID still blank (needs VA SID).
+- Object storage: uploads.py put_object/get_object route to S3 (boto3) when S3_BUCKET set; product images public-read, /returns/ photos private + serve_file now requires auth for /returns/ paths. Falls back to Emergent when S3 unset (existing files keep working). boto3 added to requirements.txt.
+- CORS: server.py reads CORS_ORIGINS (comma list) else FRONTEND_URL; env-driven, no hardcoded domain. backend/.env CORS_ORIGINS emptied (was "*").
+- Email: notifications.send_email uses SMTP when SMTP_HOST set, else Emergent fallback.
+- HTTPS: secure/httponly/SameSite=None cookies unchanged (HTTPS mandatory, handled by nginx/TLS).
+- deploy/.env.example + docker-compose.yml updated with APP_ENV, TWILIO_VERIFY_SERVICE_SID, S3_*, SMTP_*.
+- Verified: CORS env-driven, dev_otp gating, Razorpay full flow + online-refund routing all pass. Readiness rescan = WARN (no hard blockers).
+- STILL NEEDS CREDS: Twilio Verify Service SID (VA...); S3 bucket+keys(+endpoint for R2/Wasabi/Spaces); SMTP host/user/pass (or own Resend/SES). Google Play AAB: no android/ project, no eas.json, no package id yet.

@@ -91,8 +91,12 @@ async def on_shutdown():
     client.close()
 
 
-frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-allowed = list({frontend_url, "http://localhost:3000"})
+_cors = os.environ.get("CORS_ORIGINS", "").strip()
+if _cors:
+    allowed = [o.strip() for o in _cors.split(",") if o.strip()]
+else:
+    _fu = os.environ.get("FRONTEND_URL", "").strip()
+    allowed = [_fu] if _fu else ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed,

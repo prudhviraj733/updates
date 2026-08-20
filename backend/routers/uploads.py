@@ -3,7 +3,7 @@ import uuid
 import logging
 
 import requests
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Request
 
 from core.db import db
 from core.security import require_admin, get_current_user
@@ -24,6 +24,24 @@ MIME_TYPES = {
 
 _storage_key = None
 
+# ---- S3-compatible storage (production). Falls back to Emergent when unset. ----
+S3_BUCKET = os.environ.get("S3_BUCKET", "").strip()
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT_URL", "").strip() or None
+S3_REGION = os.environ.get("S3_REGION", "").strip() or None
+
+
+def _s3_enabled() -> bool:
+    return bool(S3_BUCKET)
+
+
+def _s3_client():
+    import boto3
+    return boto3.client(
+        "s3", endpoint_url=S3_ENDPOINT, region_name=S3_REGION,
+        aws_access_key_id=os.environ.get("S3_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.environ.get("S3_SECRET_ACCESS_KEY"),
+    )
+
 
 def init_storage(force: bool = False):
     global _storage_key
@@ -37,6 +55,12 @@ def init_storage(force: bool = False):
 
 
 def put_object(path: str, data: bytes, content_type: str) -> dict:
+    if _s3_enabled():
+        # Refund/replacement evidence stays private; product/store images are public-read.
+        acl = "private" if "/returns/" in path else "public-read"
+        _s3_client().put_object(Bucket=S3_BUCKET, Key=path, Body=data,
+                                ContentType=content_type, ACL=acl)
+        return {"path": path, "size": len(data)}
     key = init_storage()
     resp = requests.put(
         f"{STORAGE_URL}/objects/{path}",
@@ -55,6 +79,9 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
 
 
 def get_object(path: str):
+    if _s3_enabled():
+        obj = _s3_client().get_object(Bucket=S3_BUCKET, Key=path)
+        return obj["Body"].read(), obj.get("ContentType", "application/octet-stream")
     key = init_storage()
     resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
     if resp.status_code == 404:
@@ -99,13 +126,20 @@ async def customer_upload(file: UploadFile = File(...), user: dict = Depends(get
 
 
 @router.get("/files/{path:path}")
-async def serve_file(path: str):
+async def serve_file(request: Request, path: str):
     record = await db.files.find_one({"storage_path": path, "is_deleted": False})
     if not record:
         raise HTTPException(status_code=404, detail="File not found")
+    # Refund/replacement evidence photos are PRIVATE: require an authenticated session.
+    if "/returns/" in path:
+        try:
+            await get_current_user(request)
+        except Exception:
+            raise HTTPException(status_code=401, detail="Authentication required")
     try:
         data, content_type = get_object(path)
     except Exception:
         raise HTTPException(status_code=404, detail="File not found")
+    cache = "private, max-age=0, no-store" if "/returns/" in path else "public, max-age=86400"
     return Response(content=data, media_type=record.get("content_type", content_type),
-                    headers={"Cache-Control": "public, max-age=86400"})
+                    headers={"Cache-Control": cache})

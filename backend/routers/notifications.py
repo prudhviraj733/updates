@@ -94,9 +94,42 @@ def _assert_safe_email(subject: str, html: str) -> None:
 
 
 async def send_email(*, to: str, subject: str, html: str) -> None:
-    if not EMAIL_KEY or not to:
+    if not to:
         return
     _assert_safe_email(subject, html)
+    # Preferred: production SMTP (env-driven). Falls back to Emergent email if SMTP unset.
+    smtp_host = os.environ.get("SMTP_HOST")
+    if smtp_host:
+        def _smtp_send():
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.utils import formataddr
+            msg = MIMEText(html, "html", "utf-8")
+            msg["Subject"] = subject
+            from_email = os.environ.get("SMTP_FROM_EMAIL", os.environ.get("SMTP_USERNAME", ""))
+            msg["From"] = formataddr((EMAIL_FROM_NAME, from_email))
+            msg["To"] = to
+            if EMAIL_REPLY_TO:
+                msg["Reply-To"] = EMAIL_REPLY_TO
+            port = int(os.environ.get("SMTP_PORT", "587"))
+            user = os.environ.get("SMTP_USERNAME")
+            pwd = os.environ.get("SMTP_PASSWORD")
+            if port == 465:
+                s = smtplib.SMTP_SSL(smtp_host, port, timeout=30)
+            else:
+                s = smtplib.SMTP(smtp_host, port, timeout=30)
+                s.starttls()
+            if user and pwd:
+                s.login(user, pwd)
+            s.sendmail(from_email, [to], msg.as_string())
+            s.quit()
+        try:
+            await asyncio.to_thread(_smtp_send)
+        except Exception as e:
+            logger.error(f"SMTP send failed: {e}")
+        return
+    if not EMAIL_KEY:
+        return
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
     if EMAIL_REPLY_TO:
         payload["contact_email"] = EMAIL_REPLY_TO
@@ -107,6 +140,41 @@ async def send_email(*, to: str, subject: str, html: str) -> None:
         resp.raise_for_status()
     except Exception as e:
         logger.error(f"Email send failed: {e}")
+
+
+# ---------------- Twilio Verify (production OTP) ----------------
+def _twilio_client():
+    sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    token = os.environ.get("TWILIO_AUTH_TOKEN")
+    if not sid or not token:
+        return None
+    from twilio.rest import Client
+    return Client(sid, token)
+
+
+def twilio_verify_enabled() -> bool:
+    return bool(os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN")
+                and os.environ.get("TWILIO_VERIFY_SERVICE_SID"))
+
+
+def _verify_start_sync(phone: str) -> str:
+    c = _twilio_client()
+    vs = os.environ.get("TWILIO_VERIFY_SERVICE_SID")
+    return c.verify.v2.services(vs).verifications.create(to=phone, channel="sms").status
+
+
+def _verify_check_sync(phone: str, code: str) -> bool:
+    c = _twilio_client()
+    vs = os.environ.get("TWILIO_VERIFY_SERVICE_SID")
+    return c.verify.v2.services(vs).verification_checks.create(to=phone, code=code).status == "approved"
+
+
+async def verify_start(phone: str) -> str:
+    return await asyncio.to_thread(_verify_start_sync, phone)
+
+
+async def verify_check(phone: str, code: str) -> bool:
+    return await asyncio.to_thread(_verify_check_sync, phone, code)
 
 
 def _send_sms_sync(to: str, body: str) -> None:
