@@ -1,0 +1,47 @@
+{
+  "summary": "REAL browser Razorpay TEST-mode checkout verified end-to-end on the public preview URL. Customer login -> add in-stock product -> Checkout -> select serviceable address (520003) -> select 'Pay Online (Razorpay)' -> Place order opened the genuine Razorpay iframe popup (Test Mode banner, amount 759 matching create-order amount 75900 paise, key_id rzp_test_TRvKLkUvlTYS4b). Card payment was completed inside the third-party iframe (contact 9820098200, card 5267 3181 8797 5449, exp 12/34, CVV 123, email, 'Maybe later' on save-card, OTP 1111). POST /api/payments/razorpay/verify returned {\"status\":\"paid\"}, toast 'Payment successful!' showed, cart cleared, app navigated to /orders/<id>: order FG260800039 shows 'Order Confirmed' + 'Payment: Online (Razorpay) - Paid' + 'Total paid Rs.759', and it appears as 'Order Confirmed' in My Orders. FAILURE path: an order placed and then left un-paid (popup abandoned) stayed 'Order Placed'/pending (FG260800040) and was never marked paid. SECURITY: no key_secret and no rzp_live anywhere in page source or in any /api/* response payload; only the publishable key_id is exposed. NOTE: Razorpay test card 4111 1111 1111 1111 is REJECTED by this test account with 'International cards are not supported' - use the domestic test card 5267 3181 8797 5449 instead.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/orders", "issue": "Min-order rule compares against subtotal only (Rs.155 subtotal + Rs.60 delivery = Rs.215 shown as 'Pay Rs.215') and rejects with 'Minimum order value is Rs.199' after the user clicks Pay - error surfaces too late and the message does not say what is missing."},
+      {"endpoint": "POST /api/orders", "issue": "Address/location PIN mismatch (default address PIN 500034 under the Vijayawada/520003 location) is only rejected at order time with 'Sorry, we don't deliver to this PIN code yet.' - not flagged when the address is selected."},
+      {"endpoint": "POST /api/orders", "issue": "Every abandoned Razorpay attempt leaves a permanent pending order. This test run created 14 orphan pending online orders (FG260800027-FG260800038, FG260800040). No expiry/cleanup for unpaid online orders."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Checkout / Razorpay options", "issue": "Razorpay prefill is incomplete/invalid: no prefill.email is passed, so Razorpay adds an extra 'Enter Email' step; prefill.contact ('+919876543210') is not accepted by Razorpay and the 'Contact details' modal is shown on every attempt (Razorpay also rejects 9876543210 as 'Please enter a valid mobile number'). Pass prefill {name, email: user.email, contact: 10-digit number}.", "selector": "[data-testid=\"place-order-btn\"]", "priority": "MEDIUM"},
+      {"component": "Checkout (Razorpay handler)", "issue": "No modal.ondismiss / payment.failed handler. Closing or abandoning the Razorpay popup leaves the user sitting on Checkout with no message, cart intact and an orphan pending order in My Orders.", "selector": "iframe.razorpay-checkout-frame", "priority": "MEDIUM"},
+      {"component": "Checkout summary", "issue": "No client-side pre-validation of minimum order value; the CTA reads 'Pay Rs.215' and only a server 400 toast explains the failure.", "selector": "[data-testid=\"place-order-btn\"]", "priority": "LOW"},
+      {"component": "OrderDetail / Checkout images", "issue": "React console error: 'An empty string (\"\") was passed to the src attribute' - order/product thumbnails render with empty src (same issue reported in iteration_16, still open).", "selector": "img", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Direct navigation to /checkout", "issue": "On one run, /checkout rendered 'Your cart is empty' while the header cart badge showed 2 items (no loading guard while GET /api/cart resolves); reproduced once out of several attempts (intermittent).", "affected_selectors": ["[data-testid=\"cart-count\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Cart drawer", "issues": ["Leftover 'Swap Test Combo' line item renders with price Rs.0 and a clipped overlapping thumbnail/title; the combo is also not listed in the Checkout order summary."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Pass a valid Razorpay prefill: {name, email: <user email>, contact: <10-digit phone without +91>} so the popup goes straight to payment options.",
+    "Add modal: { ondismiss } and a payment.failed handler in Checkout.js to toast 'Payment cancelled' and navigate to the pending order (or cancel/release it).",
+    "Add cleanup/expiry for unpaid online orders and remove the 14 orphan pending test orders FG260800027-FG260800038 and FG260800040.",
+    "Client-side validate minimum order value (and show 'Add Rs.X more') plus address PIN serviceability at selection time instead of failing at Pay.",
+    "Update internal test docs: Razorpay test card 4111 1111 1111 1111 fails on this account ('International cards are not supported'); use domestic card 5267 3181 8797 5449 with OTP 1111.",
+    "Fix empty img src on order/checkout thumbnails (carry-over from iteration_16)."
+  ],
+  "critical_code_review_comments": [
+    "Checkout.js razorpay branch has no failure handling: only options.handler (success) is defined - no modal.ondismiss, no rzp.on('payment.failed'), so all non-success outcomes are silent.",
+    "setPlacing(false) is called both in the razorpay early-return and the finally block; harmless but redundant.",
+    "Cart items/total are rendered before the cart fetch resolves, allowing a false 'Your cart is empty' state on direct /checkout loads."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only run; all /api calls observed returned 200 except the two expected 400 validation cases)", "frontend": "100% on the Razorpay success + abandon paths"},
+  "seed_data_creation": "Created customer address 'TEST QA Rzp, 12 Test Road, Vijayawada - 520003' (id 0ba55df9-828e-446c-af9a-11807187984d). Paid order FG260800039 (id 62f75e9f-4b3a-4bb8-b837-aa5fdce9e829, Rs.759, razorpay order_TRvxJWmkcQavD1). 14 pending orders FG260800027-FG260800038 + FG260800040 left from abandoned popup attempts.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "customer@test.com / Test@12345 (from /app/memory/test_credentials.md). Razorpay TEST: card 5267 3181 8797 5449, exp 12/34, CVV 123, contact 9820098200, OTP 1111.",
+  "context_for_next_testing_agent": "Playwright recipe that works for the real Razorpay popup: after clicking place-order-btn, grab the frame whose url contains 'api.razorpay.com/v1/checkout/public'; fill input[name=\"contact\"]:visible (must use press_sequentially, fill() trips Razorpay validation), click button:has-text(\"Continue\"):visible last; then press_sequentially card.number/card.expiry/card.cvv and dispatch_event('click') on [data-test-id=\"add-card-cta\"] (normal click times out); an email field then appears (input[type=email]) -> submit again; click 'Maybe later' on the save-card prompt; then type OTP 1111 into input[placeholder=\"Enter OTP\"] and dispatch_event('click') on Continue. Use address PIN 520003 for the Vijayawada location and keep subtotal >= Rs.199.",
+  "rca_of_the_issue": "The extra Razorpay 'Contact details' and 'Enter Email' steps are caused by Checkout.js passing prefill.contact='+919876543210' (rejected by Razorpay validation) and no prefill.email. The 'International cards are not supported' failure is a Razorpay account-level restriction on the 4111... BIN, not an app defect; the domestic test card completes 3DS/OTP and the verify endpoint correctly flips the order to paid/confirmed."
+}

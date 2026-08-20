@@ -5,6 +5,7 @@ import { MapPin, Plus, Zap, Clock, Wallet, CreditCard, Check } from "lucide-reac
 import api, { inr } from "@/lib/api";
 import { getCurrentPosition, reverseGeocode, geoErrorMessage } from "@/lib/geo";
 import { MapPicker } from "@/components/store/MapPicker";
+import { useAuth } from "@/context/AuthContext";
 import { useStore } from "@/context/StoreContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ export default function Checkout() {
   const [slotId, setSlotId] = useState(null);
   const [payment, setPayment] = useState("cod");
   const [payConfig, setPayConfig] = useState({ razorpay_enabled: false });
+  const { user } = useAuth();
   const [settings, setSettings] = useState({ cod_enabled: true, online_payment_enabled: true });
   const [coupon, setCoupon] = useState("");
   const [productCoupon, setProductCoupon] = useState(null);
@@ -204,10 +206,25 @@ export default function Checkout() {
               navigate(`/orders/${order.id}`);
             }
           },
-          prefill: { name: order.customer_name, contact: order.customer_phone },
+          prefill: {
+            name: order.customer_name,
+            email: user?.email || undefined,
+            contact: (order.customer_phone || "").replace(/\D/g, "").slice(-10),
+          },
+          modal: {
+            ondismiss: () => {
+              setPlacing(false);
+              toast.info("Payment cancelled. Your order is saved — you can retry payment from My Orders.");
+              navigate(`/orders/${order.id}`);
+            },
+          },
           theme: { color: "#1B4332" },
         };
-        new window.Razorpay(options).open();
+        const rz = new window.Razorpay(options);
+        rz.on("payment.failed", () => {
+          toast.error("Payment failed. Please try again or choose another method.");
+        });
+        rz.open();
         setPlacing(false);
         return;
       }

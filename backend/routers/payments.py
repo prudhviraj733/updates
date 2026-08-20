@@ -18,6 +18,17 @@ def _client():
     return razorpay.Client(auth=(key_id, key_secret))
 
 
+def refund_payment(payment_id: str, amount_rupees: float, notes: dict = None) -> dict:
+    """Trigger a Razorpay refund to the original payment method. Raises on failure."""
+    client = _client()
+    if not client:
+        raise RuntimeError("Razorpay not configured")
+    data = {"amount": int(round(amount_rupees * 100)), "speed": "normal"}
+    if notes:
+        data["notes"] = notes
+    return client.payment.refund(payment_id, data)
+
+
 @router.get("/payments/config")
 async def payment_config():
     key_id = os.environ.get("RAZORPAY_KEY_ID", "")
@@ -72,6 +83,14 @@ async def verify_payment(body: dict, user: dict = Depends(get_current_user)):
          "$push": {"status_history": {"status": "confirmed", "at": now_iso()}}})
     await db.payments.update_one({"razorpay_order_id": params["razorpay_order_id"]},
                                  {"$set": {"status": "paid", "razorpay_payment_id": params["razorpay_payment_id"]}})
+    updated = await db.orders.find_one({"razorpay_order_id": params["razorpay_order_id"]}, {"_id": 0})
+    if updated and not updated.get("receipt_sent"):
+        await db.orders.update_one({"id": updated["id"]}, {"$set": {"receipt_sent": True}})
+        from routers.notifications import send_payment_receipt
+        try:
+            await send_payment_receipt(updated)
+        except Exception:
+            pass
     return {"status": "paid"}
 
 
@@ -115,6 +134,14 @@ async def webhook(request: Request):
             await db.payments.update_one(
                 {"razorpay_order_id": rzp_order_id},
                 {"$set": {"status": "paid", "razorpay_payment_id": rzp_payment_id, "source": "webhook"}})
+            if not order.get("receipt_sent"):
+                await db.orders.update_one({"razorpay_order_id": rzp_order_id}, {"$set": {"receipt_sent": True}})
+                fresh = await db.orders.find_one({"razorpay_order_id": rzp_order_id}, {"_id": 0})
+                from routers.notifications import send_payment_receipt
+                try:
+                    await send_payment_receipt(fresh)
+                except Exception:
+                    pass
     elif etype == "payment.failed":
         if order.get("payment_status") not in ("paid", "refunded"):
             await db.orders.update_one(

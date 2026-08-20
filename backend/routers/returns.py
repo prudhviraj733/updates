@@ -287,19 +287,35 @@ async def update_return_status(request_id: str, payload: ReturnStatusUpdateInput
         await db.inventory.update_one(key, {"$inc": {"reserved_quantity": -r["quantity"],
                                                      "sold_quantity": r["quantity"]}})
 
-    # ----- Refunded: credit wallet once (idempotent), record refund block -----
-    if new == "refunded":
-        if not r.get("refund"):
+    # ----- Refunded: online-paid -> Razorpay refund; else wallet credit (idempotent) -----
+    if new == "refunded" and not r.get("refund"):
+        amount = payload.refund_amount if payload.refund_amount is not None else r["line_amount"]
+        amount = round(float(amount), 2)
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Refund amount must be greater than 0")
+        if amount > r["line_amount"] + 0.01:
+            raise HTTPException(status_code=400,
+                                detail=f"Refund cannot exceed the item value (₹{r['line_amount']})")
+        order = await db.orders.find_one({"id": r["order_id"]}, {"_id": 0})
+        is_online = bool(order and order.get("payment_method") == "online"
+                         and order.get("razorpay_payment_id")
+                         and order.get("payment_status") in ("paid", "refunded"))
+        if is_online:
+            from routers.payments import refund_payment
+            try:
+                rf = refund_payment(order["razorpay_payment_id"], amount,
+                                    notes={"request": r["request_number"], "product": r["product_name"]})
+            except Exception as e:
+                raise HTTPException(status_code=400,
+                                    detail=f"Razorpay refund failed: {str(e) or 'payment could not be refunded'}")
+            update["refund"] = {
+                "amount": amount, "reason": r["reason_label"], "method": "razorpay",
+                "reference_id": rf.get("id"), "approved_by": admin.get("email"), "at": now_iso(),
+            }
+        else:
             from routers.wallet import add_wallet_entry
             already = await db.wallet_ledger.find_one({"order_id": r["order_id"], "reason": "refund",
                                                        "notes": {"$regex": r["request_number"]}})
-            amount = payload.refund_amount if payload.refund_amount is not None else r["line_amount"]
-            amount = round(float(amount), 2)
-            if amount <= 0:
-                raise HTTPException(status_code=400, detail="Refund amount must be greater than 0")
-            if amount > r["line_amount"] + 0.01:
-                raise HTTPException(status_code=400,
-                                    detail=f"Refund cannot exceed the item value (₹{r['line_amount']})")
             if not already:
                 entry = await add_wallet_entry(
                     r["user_id"], amount, "refund", order_id=r["order_id"], source="refund",

@@ -137,6 +137,44 @@ STATUS_MESSAGES = {
 }
 
 
+async def send_payment_receipt(order: dict) -> None:
+    """Email a payment receipt once an order's payment is confirmed."""
+    order_no = order.get("order_number", "")
+    email = None
+    try:
+        user = await db.users.find_one({"_id": ObjectId(order["user_id"])}, {"email": 1})
+        email = user.get("email") if user else None
+    except Exception:
+        email = None
+    if not email:
+        return
+    rows = "".join(
+        f'<tr><td style="padding:4px 0">{escape(str(it.get("name", "")))} &times; {it.get("quantity", 1)}</td>'
+        f'<td style="padding:4px 0;text-align:right">&#8377;{it.get("line_total", 0)}</td></tr>'
+        for it in order.get("items", []))
+    pay_ref = escape(str(order.get("razorpay_payment_id") or order.get("payment_method", "")))
+    html = (
+        f'<table role="presentation" width="100%"><tr><td style="padding:24px;'
+        f'font-family:Arial,sans-serif;color:#111">'
+        f'<h2 style="color:#1B4332;margin:0 0 8px">Payment received</h2>'
+        f'<p>Hi {escape(order.get("customer_name", "there"))}, thanks for your payment. '
+        f'Here is your receipt.</p>'
+        f'<p>Order <strong>{escape(order_no)}</strong><br>Payment ref: {pay_ref}</p>'
+        f'<table width="100%" style="border-top:1px solid #eee;border-bottom:1px solid #eee;'
+        f'margin:12px 0">{rows}</table>'
+        f'<p style="text-align:right">Subtotal: &#8377;{order.get("subtotal", 0)}<br>'
+        f'Delivery: &#8377;{order.get("delivery_charge", 0)}<br>'
+        f'<strong>Total paid: &#8377;{order.get("final_amount", 0)}</strong></p>'
+        f'<p style="font-size:12px;color:#888;margin-top:24px">Sent by {escape(EMAIL_FROM_NAME)}. '
+        f'This is a payment receipt for your records.</p>'
+        f'</td></tr></table>'
+    )
+    try:
+        await send_email(to=email, subject=f"{EMAIL_FROM_NAME}: Payment receipt ({order_no})", html=html)
+    except Exception as e:
+        logger.error(f"receipt email error: {e}")
+
+
 async def notify_order(order: dict, status: str) -> None:
     title, line = STATUS_MESSAGES.get(status, ("Order update", f"Your order status is now {status}."))
     order_no = order.get("order_number", "")
