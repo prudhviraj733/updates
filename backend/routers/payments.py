@@ -86,4 +86,42 @@ async def webhook(request: Request):
             client.utility.verify_webhook_signature(payload.decode(), signature, secret)
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    import json
+    try:
+        event = json.loads(payload.decode() or "{}")
+    except Exception:
+        return {"status": "ignored"}
+
+    etype = event.get("event", "")
+    entity = (((event.get("payload") or {}).get("payment") or {}).get("entity")) or {}
+    rzp_order_id = entity.get("order_id")
+    rzp_payment_id = entity.get("id")
+    if not rzp_order_id:
+        return {"status": "ok"}
+
+    order = await db.orders.find_one({"razorpay_order_id": rzp_order_id})
+    if not order:
+        return {"status": "ok"}
+
+    if etype in ("payment.captured", "order.paid"):
+        # Idempotent: only promote if not already paid
+        if order.get("payment_status") != "paid":
+            await db.orders.update_one(
+                {"razorpay_order_id": rzp_order_id},
+                {"$set": {"payment_status": "paid", "status": "confirmed",
+                          "razorpay_payment_id": rzp_payment_id, "updated_at": now_iso()},
+                 "$push": {"status_history": {"status": "confirmed", "at": now_iso()}}})
+            await db.payments.update_one(
+                {"razorpay_order_id": rzp_order_id},
+                {"$set": {"status": "paid", "razorpay_payment_id": rzp_payment_id, "source": "webhook"}})
+    elif etype == "payment.failed":
+        if order.get("payment_status") not in ("paid", "refunded"):
+            await db.orders.update_one(
+                {"razorpay_order_id": rzp_order_id},
+                {"$set": {"payment_status": "failed", "updated_at": now_iso()}})
+            await db.payments.update_one(
+                {"razorpay_order_id": rzp_order_id},
+                {"$set": {"status": "failed", "razorpay_payment_id": rzp_payment_id, "source": "webhook"}})
+
     return {"status": "ok"}
