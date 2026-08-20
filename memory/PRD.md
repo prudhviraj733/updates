@@ -317,3 +317,9 @@ Platform Usage (Website vs App) — real data only:
 - Resend email via SMTP (smtp.resend.com:465, user=resend, key in env, from=onboarding@resend.dev). send_email SMTP path succeeds without error; set a verified domain sender for general delivery.
 - Cloudflare R2: endpoint + access key id + bucket 'bestkart' recorded; S3_SECRET_ACCESS_KEY MISSING -> S3_BUCKET left empty so storage stays on working fallback (avoids broken uploads). Provide R2 secret to activate (code already supports via S3_* + endpoint).
 - All secrets in git-ignored backend/.env only; none in source/frontend/logs/responses. No code changed this iteration (env-only).
+
+## Iteration 28 (2026-06) — Cloudflare R2 activated & tested
+- R2 Secret Access Key configured; S3_BUCKET=bestkart enabled. Object storage now uses R2 (boto3, S3-compatible endpoint) — Emergent storage dependency removed for new uploads.
+- Tests PASS: product image upload -> R2 (url returned), retrieval GET 200 image/png 70B round-trip, refund/replacement photo upload -> R2 private (unauth GET 401, admin GET 200).
+- All creds in git-ignored backend/.env only; nothing in source/logs/responses. No code changed (env-only).
+- Remaining for full live prod: Twilio trial->upgrade or verify recipient numbers; Resend verified sender domain (currently onboarding@resend.dev sandbox).
