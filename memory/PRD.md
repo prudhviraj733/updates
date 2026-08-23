@@ -323,3 +323,8 @@ Platform Usage (Website vs App) — real data only:
 - Tests PASS: product image upload -> R2 (url returned), retrieval GET 200 image/png 70B round-trip, refund/replacement photo upload -> R2 private (unauth GET 401, admin GET 200).
 - All creds in git-ignored backend/.env only; nothing in source/logs/responses. No code changed (env-only).
 - Remaining for full live prod: Twilio trial->upgrade or verify recipient numbers; Resend verified sender domain (currently onboarding@resend.dev sandbox).
+
+## 2026-08-23 — Production Docker/VPS login fix (bestkart.in)
+- ROOT CAUSE: (1) frontend/src/lib/api.js baked `${REACT_APP_BACKEND_URL}/api` -> literal "undefined/api" when build arg unset; (2) docker-compose delivered backend vars only via ${VAR} interpolation -> JWT_SECRET/auth vars empty when deploy/.env not picked up.
+- FIX (minimal, no feature change): api.js now strips trailing slash and falls back to same-origin relative "/api"; deploy/docker-compose.yml backend now uses `env_file: - .env` (fails fast if missing, always delivers runtime vars); deploy/.env.example REACT_APP_BACKEND_URL blank recommended for single-domain (handles apex+www), CORS_ORIGINS includes www.
+- VERIFIED: register/login/session 200 end-to-end; api base logic unset->/api, set->absolute; compose YAML valid.

@@ -1,7 +1,11 @@
 import axios from "axios";
 import { detectPlatform, getVisitorId } from "@/lib/platform";
 
-export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+// Single-domain safe: if REACT_APP_BACKEND_URL is empty/unset, fall back to a
+// same-origin relative "/api" (nginx proxies /api -> backend). Never bake
+// the literal string "undefined".
+const RAW_BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+export const API = `${RAW_BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API,
