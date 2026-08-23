@@ -155,8 +155,6 @@ class DeliverySettingsInput(BaseModel):
     slot_duration_minutes: int = 60
     prep_time_minutes: int = 90
     max_orders_per_slot: int = 10
-    asap_enabled: bool = True
-    asap_charge: float = 100
     holidays: List[str] = []
 
 
@@ -195,7 +193,8 @@ class PinCodeInput(BaseModel):
     location_id: str
     area_name: Optional[str] = ""
     is_serviceable: bool = True
-    asap_enabled: bool = True
+    express_enabled: bool = False              # "Get in 30 Minutes" — off unless admin enables per PIN
+    express_charge: Optional[float] = None     # 30-minute delivery charge for this PIN
     min_order_value: float = 0
     delivery_charge: Optional[float] = None
     free_delivery_threshold: Optional[float] = None
@@ -277,7 +276,7 @@ class ComboCartUpdateInput(BaseModel):
 class CouponInput(BaseModel):
     code: str
     coupon_type: str = "product"        # product | delivery
-    delivery_scope: str = "both"        # normal | asap | both (only for delivery coupons)
+    delivery_scope: str = "both"        # normal | express | both (only for delivery coupons)
     discount_type: str = "percentage"   # percentage | fixed
     discount_value: float = 0
     min_order_value: float = 0
@@ -316,7 +315,7 @@ class CouponValidateInput(BaseModel):
     location_id: str
     subtotal: float
     delivery_charge: float = 0
-    asap_charge: float = 0
+    express_charge: float = 0
     applied_codes: List[str] = []
 
 
@@ -357,7 +356,7 @@ class PackageInput(BaseModel):
 class OrderInput(BaseModel):
     location_id: str
     address_id: str
-    delivery_type: str = "slot"  # slot | asap
+    delivery_type: str = "slot"  # slot | express
     slot_id: Optional[str] = None
     payment_method: str = "cod"  # cod | razorpay
     coupon_code: Optional[str] = None

@@ -102,7 +102,7 @@ export default function AdminCoupons() {
                 <div><Label>Applies to</Label>
                   <Select value={form.delivery_scope} onValueChange={(v) => setForm({ ...form, delivery_scope: v })}>
                     <SelectTrigger data-testid="delivery-scope"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="normal">Normal delivery</SelectItem><SelectItem value="asap">ASAP only</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="normal">Normal delivery</SelectItem><SelectItem value="express">30-Min only</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent>
                   </Select>
                 </div>
               )}

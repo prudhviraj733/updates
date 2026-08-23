@@ -56,7 +56,7 @@ async def dashboard_overview(days: int = None, admin: dict = Depends(require_adm
         "sales": round(sum(o.get("final_amount", 0) for o in sord), 2),
         "profit": round(sum(o.get("final_amount", 0) - _order_cogs(o) for o in sord), 2),
         "discounts": round(sum(o.get("product_discount", 0) + o.get("combo_discount", 0) + o.get("coupon_discount", 0) for o in sord), 2),
-        "delivery_collected": round(sum(o.get("delivery_charge", 0) + o.get("asap_charge", 0) for o in sord), 2),
+        "delivery_collected": round(sum(o.get("delivery_charge", 0) + o.get("express_charge", o.get("asap_charge", 0)) for o in sord), 2),
         "refunds": round(refunds_scoped, 2),
     }
 
@@ -98,7 +98,7 @@ async def dashboard_overview(days: int = None, admin: dict = Depends(require_adm
         m = perf.setdefault(pc, {"pincode": pc, "orders": 0, "sales": 0.0, "delivery": 0.0, "customers": set()})
         m["orders"] += 1
         m["sales"] += o.get("final_amount", 0)
-        m["delivery"] += o.get("delivery_charge", 0) + o.get("asap_charge", 0)
+        m["delivery"] += o.get("delivery_charge", 0) + o.get("express_charge", o.get("asap_charge", 0))
         if o.get("user_id"):
             m["customers"].add(o["user_id"])
     pin_performance = sorted(
@@ -141,7 +141,7 @@ async def dashboard_overview(days: int = None, admin: dict = Depends(require_adm
         "gross_sales": round(sum(o.get("subtotal", 0) for o in v), 2),
         "product_discounts": round(sum(o.get("product_discount", 0) + o.get("combo_discount", 0) for o in v), 2),
         "coupon_discounts": round(sum(o.get("coupon_discount", 0) for o in v), 2),
-        "delivery_revenue": round(sum(o.get("delivery_charge", 0) + o.get("asap_charge", 0) for o in v), 2),
+        "delivery_revenue": round(sum(o.get("delivery_charge", 0) + o.get("express_charge", o.get("asap_charge", 0)) for o in v), 2),
         "refunds": round(refunds, 2),
         "wallet_credits": round(wallet_credits, 2),
         "wallet_debits": round(wallet_debits, 2),

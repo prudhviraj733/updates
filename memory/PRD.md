@@ -339,3 +339,12 @@ Platform Usage (Website vs App) — real data only:
 - New env: FIREBASE_SERVICE_ACCOUNT_JSON, WEBHOOK_CRON_SECRET (backend/.env + deploy/.env.example + docker-compose env_file). requirements.txt frozen with firebase-admin 7.5.0.
 - VERIFIED: backend 11/11 curl flows; frontend testing agent 12/12 (iteration_18.json). Test data cleaned.
 - PENDING (user/account): supply Firebase service-account JSON to enable real Android push; Android app itself is still a scaffold (must be built to receive closed-app push).
+
+## 2026-08-23 — ASAP replaced by "Get in 30 Minutes" (per-PIN express delivery)
+- Removed global ASAP; express delivery is now per-PIN: PinCodeInput.express_enabled + express_charge (models.py, pincodes.py check returns them).
+- Admin PIN dialog: "Get in 30 Minutes available" toggle + "30-minute delivery charge"; list shows Normal + 30-Min columns. AdminDelivery ASAP section removed (30-min is per-PIN).
+- Checkout: express card shows only when PIN.express_enabled; adds express_charge; auto-falls back to slot if PIN lacks it. Order: delivery_type "express", express_charge, is_express + is_priority.
+- Admin orders: "30-Min Delivery" badge + "30-Min" tag + charge row. Analytics express_revenue; PIN stats express_orders. Coupons delivery scope "express".
+- Backward-compat: legacy orders/coupons with delivery_type/scope "asap" and asap_charge still render as "Get in 30 Minutes" and count in revenue.
+- Migration run on existing pincodes (520003/520004 enabled Rs100, 520005 disabled); slots no longer expose asap.
+- VERIFIED: backend API E2E (express order 699+40+100=839, disabled-PIN 400, analytics express_revenue, slots no asap); frontend testing agent iteration_19.json 10/11 then fixed remaining Home/Footer copy. Test data cleaned.

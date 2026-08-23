@@ -13,8 +13,7 @@ IST = pytz.timezone("Asia/Kolkata")
 
 DEFAULT_SETTINGS = {
     "operating_start": "09:00", "operating_end": "21:00", "slot_duration_minutes": 60,
-    "prep_time_minutes": 90, "max_orders_per_slot": 10, "asap_enabled": True,
-    "asap_charge": 100, "holidays": [],
+    "prep_time_minutes": 90, "max_orders_per_slot": 10, "holidays": [],
 }
 
 
@@ -35,7 +34,7 @@ async def compute_slots(location_id: str, date_str: str) -> dict:
     now = datetime.now(IST)
     target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
 
-    result = {"date": date_str, "slots": [], "asap": {"enabled": False, "charge": s["asap_charge"]}}
+    result = {"date": date_str, "slots": []}
 
     if date_str in s.get("holidays", []):
         return result
@@ -73,11 +72,6 @@ async def compute_slots(location_id: str, date_str: str) -> dict:
         })
         cur = slot_end
 
-    # ASAP available only for today while store still operating and prep window fits
-    if (s.get("asap_enabled") and target_date == now.date()
-            and earliest <= close_dt and now >= open_dt - timedelta(minutes=s["prep_time_minutes"])):
-        result["asap"] = {"enabled": True, "charge": s["asap_charge"],
-                          "eta": earliest.strftime("%I:%M %p")}
     return result
 
 

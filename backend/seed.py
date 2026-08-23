@@ -47,7 +47,7 @@ async def seed_data():
     await db.delivery_settings.insert_one({
         "location_id": loc_id, "operating_start": "08:00", "operating_end": "21:00",
         "slot_duration_minutes": 90, "prep_time_minutes": 90, "max_orders_per_slot": 10,
-        "asap_enabled": True, "asap_charge": 100, "holidays": [],
+        "holidays": [],
     })
 
     categories = [
@@ -307,6 +307,7 @@ async def seed_catalog_extensions():
                     "area_name": loc.get("area", ""), "is_serviceable": True,
                     "min_order_value": loc.get("min_order_value", 0),
                     "delivery_charge": loc.get("delivery_charge", 0),
+                    "express_enabled": True, "express_charge": 100,
                     "discount_type": None, "discount_value": 0, "max_discount": None,
                     "notes": "", "created_at": now_iso(), "updated_at": now_iso(),
                 })

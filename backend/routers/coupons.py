@@ -21,14 +21,14 @@ def _calc_discount(coupon: dict, subtotal: float) -> float:
     return round(min(disc, subtotal), 2)
 
 
-def _calc_delivery_discount(coupon: dict, delivery_charge: float, asap_charge: float) -> float:
-    """Delivery coupons discount normal delivery, asap, or both based on delivery_scope."""
+def _calc_delivery_discount(coupon: dict, delivery_charge: float, express_charge: float) -> float:
+    """Delivery coupons discount normal delivery, 30-minute (express), or both by delivery_scope."""
     scope = coupon.get("delivery_scope", "both")
     base = 0.0
     if scope in ("normal", "both"):
         base += delivery_charge
-    if scope in ("asap", "both"):
-        base += asap_charge
+    if scope in ("express", "asap", "both"):
+        base += express_charge
     if coupon["discount_type"] == "percentage":
         disc = base * coupon["discount_value"] / 100
     else:
@@ -72,9 +72,9 @@ async def validate_coupon(payload: CouponValidateInput):
         raise HTTPException(status_code=400, detail=f"You can only apply one {label} coupon per order")
 
     if ctype == "delivery":
-        if payload.delivery_charge <= 0 and payload.asap_charge <= 0:
+        if payload.delivery_charge <= 0 and payload.express_charge <= 0:
             raise HTTPException(status_code=400, detail="No delivery charge to discount")
-        discount = _calc_delivery_discount(coupon, payload.delivery_charge, payload.asap_charge)
+        discount = _calc_delivery_discount(coupon, payload.delivery_charge, payload.express_charge)
         return {"code": coupon["code"], "coupon_type": "delivery", "delivery_scope": coupon.get("delivery_scope", "both"),
                 "discount": discount, "message": "Delivery coupon applied"}
 

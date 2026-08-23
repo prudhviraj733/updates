@@ -101,6 +101,11 @@ export default function Checkout() {
     api.get(`/pincodes/check?pincode=${activePincode}`).then(({ data }) => setDeliveryInfo(data)).catch(() => setDeliveryInfo(null));
   }, [activePincode]);
 
+  // If the chosen PIN doesn't offer 30-minute delivery, fall back to slot.
+  useEffect(() => {
+    if (deliveryType === "express" && !deliveryInfo?.express_enabled) setDeliveryType("slot");
+  }, [deliveryInfo, deliveryType]);
+
   if (!location) return null;
   if (cart.items.length === 0) {
     return (
@@ -111,16 +116,16 @@ export default function Checkout() {
     );
   }
 
-  const slotData = slotDays[dayIndex] || { slots: [], asap: {} };
-  const asapInfo = slotDays[0]?.asap || {};
-  const asapCharge = asapInfo.charge || 0;
+  const slotData = slotDays[dayIndex] || { slots: [] };
+  const expressEnabled = !!deliveryInfo?.express_enabled;
+  const expressCharge = deliveryInfo?.express_charge || 0;
   const baseDeliveryCharge = deliveryInfo?.serviceable ? (deliveryInfo.delivery_charge || 0) : (location.delivery_charge || 0);
   const freeThreshold = deliveryInfo?.free_delivery_threshold;
   const freeApplied = freeThreshold != null && cart.subtotal >= freeThreshold;
   const deliveryCharge = freeApplied ? 0 : baseDeliveryCharge;
   const productDiscount = productCoupon?.discount || 0;
   const deliveryDiscount = deliveryCoupon?.discount || 0;
-  const extra = deliveryType === "asap" ? asapCharge : 0;
+  const extra = deliveryType === "express" ? expressCharge : 0;
   const beforeWallet = Math.max(0, cart.subtotal - productDiscount + deliveryCharge + extra - deliveryDiscount);
   const walletApplied = useWallet ? Math.min(walletBalance, beforeWallet) : 0;
   const total = Math.max(0, beforeWallet - walletApplied);
@@ -131,7 +136,7 @@ export default function Checkout() {
     try {
       const { data } = await api.post("/coupons/validate", {
         code: coupon, location_id: location.id, subtotal: cart.subtotal,
-        delivery_charge: deliveryCharge, asap_charge: extra, applied_codes: appliedCodes,
+        delivery_charge: deliveryCharge, express_charge: extra, applied_codes: appliedCodes,
       });
       if (data.coupon_type === "delivery") { setDeliveryCoupon(data); }
       else { setProductCoupon(data); }
@@ -148,7 +153,7 @@ export default function Checkout() {
     try {
       const { data } = await api.post("/coupons/validate", {
         code, location_id: location.id, subtotal: cart.subtotal,
-        delivery_charge: deliveryCharge, asap_charge: extra, applied_codes: appliedCodes,
+        delivery_charge: deliveryCharge, express_charge: extra, applied_codes: appliedCodes,
       });
       if (data.coupon_type === "delivery") setDeliveryCoupon(data); else setProductCoupon(data);
       toast.success(`Coupon applied: -${inr(data.discount)}`);
@@ -288,14 +293,14 @@ export default function Checkout() {
                 <div className="flex items-center gap-2"><Clock className="h-5 w-5 text-forest" /><span className="font-medium">Scheduled Slot</span></div>
                 <p className="mt-1 text-xs text-muted-foreground">Pick a convenient delivery window</p>
               </button>
-              {asapInfo.enabled && deliveryInfo?.asap_enabled !== false && (
+              {expressEnabled && (
                 <button
-                  data-testid="delivery-asap-option"
-                  onClick={() => setDeliveryType("asap")}
-                  className={`rounded-xl border-2 p-4 text-left transition-colors ${deliveryType === "asap" ? "border-saffron bg-saffron/10" : "border-dashed border-saffron/50 hover:bg-saffron/5"}`}
+                  data-testid="delivery-express-option"
+                  onClick={() => setDeliveryType("express")}
+                  className={`rounded-xl border-2 p-4 text-left transition-colors ${deliveryType === "express" ? "border-saffron bg-saffron/10" : "border-dashed border-saffron/50 hover:bg-saffron/5"}`}
                 >
-                  <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-saffron" /><span className="font-medium text-saffron">As Soon As Possible</span></div>
-                  <p className="mt-1 text-xs text-muted-foreground">Priority delivery{asapInfo.eta && ` by ~${asapInfo.eta}`} · +{inr(asapCharge)}</p>
+                  <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-saffron" /><span className="font-medium text-saffron">Get in 30 Minutes</span></div>
+                  <p className="mt-1 text-xs text-muted-foreground">Express delivery to your door · +{inr(expressCharge)}</p>
                 </button>
               )}
             </div>
@@ -336,7 +341,7 @@ export default function Checkout() {
                     </button>
                   ))}
                   {slotData.slots.filter((s) => s.available).length === 0 && (
-                    <p className="col-span-full text-sm text-muted-foreground">No slots available for this day. Pick another date or choose ASAP.</p>
+                    <p className="col-span-full text-sm text-muted-foreground">No slots available for this day. Pick another date{expressEnabled ? " or choose Get in 30 Minutes" : ""}.</p>
                   )}
                 </div>
               </div>
@@ -428,7 +433,7 @@ export default function Checkout() {
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{inr(cart.subtotal)}</span></div>
               {productDiscount > 0 && <div className="flex justify-between text-forest"><span>Coupon</span><span>-{inr(productDiscount)}</span></div>}
               <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{inr(deliveryCharge)}</span></div>
-              {deliveryType === "asap" && <div className="flex justify-between text-saffron"><span>Priority (ASAP)</span><span>+{inr(asapCharge)}</span></div>}
+              {deliveryType === "express" && <div className="flex justify-between text-saffron"><span>Get in 30 Minutes</span><span>+{inr(expressCharge)}</span></div>}
               {deliveryDiscount > 0 && <div className="flex justify-between text-blue-700"><span>Delivery coupon</span><span>-{inr(deliveryDiscount)}</span></div>}
               {walletApplied > 0 && <div className="flex justify-between text-forest"><span>Wallet</span><span>-{inr(walletApplied)}</span></div>}
               <div className="flex justify-between pt-2 text-lg font-bold"><span>Total</span><span data-testid="order-total">{inr(total)}</span></div>

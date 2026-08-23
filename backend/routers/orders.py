@@ -202,13 +202,11 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
     pin_free_applied = bool(pin_free_threshold) and subtotal >= pin_free_threshold
     if pin_free_applied:
         delivery_charge = 0
-    asap_charge = 0.0
-    if payload.delivery_type == "asap":
-        if not pin.get("asap_enabled", True):
-            raise HTTPException(status_code=400, detail="ASAP delivery is not available for this PIN code")
-        if not settings.get("asap_enabled"):
-            raise HTTPException(status_code=400, detail="ASAP delivery not available for this location")
-        asap_charge = settings.get("asap_charge", 100)
+    express_charge = 0.0
+    if payload.delivery_type == "express":
+        if not pin.get("express_enabled"):
+            raise HTTPException(status_code=400, detail="Get in 30 Minutes is not available for this PIN code")
+        express_charge = pin.get("express_charge") or 0
     else:
         if not payload.slot_id:
             raise HTTPException(status_code=400, detail="Please select a delivery slot")
@@ -246,7 +244,7 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         delivery_charge = 0
         free_delivery_applied = True
 
-    # Delivery-type coupon (stacks with 1 product coupon; discounts normal/asap/both)
+    # Delivery-type coupon (stacks with 1 product coupon; discounts normal/30-min/both)
     delivery_discount = 0.0
     delivery_coupon_code = None
     if payload.delivery_coupon_code:
@@ -255,10 +253,10 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         if dcoupon:
             if dcoupon.get("location_ids") and payload.location_id not in dcoupon["location_ids"]:
                 raise HTTPException(status_code=400, detail="Delivery coupon not valid for this location")
-            delivery_discount = _calc_delivery_discount(dcoupon, delivery_charge, asap_charge)
+            delivery_discount = _calc_delivery_discount(dcoupon, delivery_charge, express_charge)
             delivery_coupon_code = dcoupon["code"]
 
-    final_amount = round(subtotal - coupon_discount + delivery_charge + asap_charge - delivery_discount, 2)
+    final_amount = round(subtotal - coupon_discount + delivery_charge + express_charge - delivery_discount, 2)
     final_amount = max(0.0, final_amount)
 
     # Redeem wallet balance (partial or full)
@@ -298,12 +296,13 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         "campaign_id": campaign_id,
         "free_delivery_applied": free_delivery_applied,
         "delivery_charge": delivery_charge,
-        "asap_charge": asap_charge,
+        "express_charge": express_charge,
         "final_amount": final_amount,
         "delivery_type": payload.delivery_type,
         "slot_id": slot_id,
         "slot_label": slot_label,
-        "is_priority": payload.delivery_type == "asap",
+        "is_priority": payload.delivery_type == "express",
+        "is_express": payload.delivery_type == "express",
         "accepted": False,
         "accepted_at": None,
         "tracking_url": None,

@@ -48,8 +48,8 @@ export default function Home() {
               Fresh groceries & dry fruits, delivered on your schedule
             </h1>
             <p className="mt-5 max-w-md text-base leading-relaxed text-white/80">
-              Shop rice, dals, oils, spices, nuts and daily essentials. Pick a delivery slot or choose express
-              As-Soon-As-Possible delivery.
+              Shop rice, dals, oils, spices, nuts and daily essentials. Pick a delivery slot or, in select
+              areas, get it in 30 minutes.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button
@@ -69,7 +69,7 @@ export default function Home() {
             </div>
             <div className="mt-10 flex flex-wrap gap-6 text-white/80">
               <div className="flex items-center gap-2"><Truck className="h-5 w-5 text-saffron" /><span className="text-sm">Slot delivery</span></div>
-              <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-saffron" /><span className="text-sm">Express ASAP</span></div>
+              <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-saffron" /><span className="text-sm">Get in 30 Minutes</span></div>
               <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-saffron" /><span className="text-sm">Quality assured</span></div>
             </div>
           </div>
@@ -150,7 +150,7 @@ export default function Home() {
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-saffron text-white"><Clock className="h-7 w-7" /></div>
             <div>
               <h3 className="font-heading text-xl font-bold">Need it urgently?</h3>
-              <p className="text-sm text-muted-foreground">Choose As-Soon-As-Possible delivery at checkout for priority handling.</p>
+              <p className="text-sm text-muted-foreground">Choose Get in 30 Minutes at checkout where available in your area.</p>
             </div>
           </div>
           <Button onClick={() => navigate("/products")} className="rounded-full bg-forest hover:bg-forest-dark">Shop now</Button>

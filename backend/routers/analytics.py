@@ -39,7 +39,7 @@ async def analytics_overview(location_id: str = None, days: int = None, admin: d
     product_discount = sum(o.get("product_discount", 0) for o in valid)
     coupon_discount = sum(o.get("coupon_discount", 0) for o in valid)
     delivery_revenue = sum(o.get("delivery_charge", 0) for o in valid)
-    asap_revenue = sum(o.get("asap_charge", 0) for o in valid)
+    express_revenue = sum(o.get("express_charge", o.get("asap_charge", 0)) for o in valid)
 
     # COGS from item cost snapshots
     cogs = 0.0
@@ -76,7 +76,7 @@ async def analytics_overview(location_id: str = None, days: int = None, admin: d
         "coupon_discount": round(coupon_discount, 2),
         "total_discount": round(product_discount + coupon_discount, 2),
         "delivery_revenue": round(delivery_revenue, 2),
-        "asap_revenue": round(asap_revenue, 2),
+        "express_revenue": round(express_revenue, 2),
         "cogs": round(cogs, 2),
         "gross_profit": round(gross_profit, 2),
         "gross_margin_pct": round(gross_profit / net_revenue * 100, 1) if net_revenue else 0,
@@ -278,12 +278,12 @@ async def pin_stats(admin: dict = Depends(require_admin)):
     pins = {}
     for o in orders:
         pc = (o.get("address") or {}).get("pincode") or "Unknown"
-        row = pins.setdefault(pc, {"pincode": pc, "orders": 0, "sales": 0, "customers": set(), "asap": 0})
+        row = pins.setdefault(pc, {"pincode": pc, "orders": 0, "sales": 0, "customers": set(), "express": 0})
         row["orders"] += 1
         row["sales"] += o.get("final_amount", 0)
         row["customers"].add(o.get("user_id"))
-        if o.get("delivery_type") == "asap":
-            row["asap"] += 1
+        if o.get("delivery_type") in ("express", "asap"):
+            row["express"] += 1
     out = []
     # serviceability map
     pin_docs = {p["pincode"]: p for p in await db.pincodes.find({}, {"_id": 0}).to_list(5000)}
@@ -295,7 +295,7 @@ async def pin_stats(admin: dict = Depends(require_admin)):
             "sales": round(r["sales"], 2),
             "aov": round(r["sales"] / r["orders"], 2) if r["orders"] else 0,
             "customers": cust,
-            "asap_orders": r["asap"],
+            "express_orders": r["express"],
             "serviceable": pin_docs.get(pc, {}).get("is_serviceable", None),
         })
     out.sort(key=lambda x: x["sales"], reverse=True)

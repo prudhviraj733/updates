@@ -126,8 +126,8 @@ export function OrderDetail() {
 
       <div className="mt-4 rounded-2xl border border-black/5 bg-white p-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          {order.delivery_type === "asap" ? <Zap className="h-4 w-4 text-saffron" /> : <Clock className="h-4 w-4 text-forest" />}
-          {order.delivery_type === "asap" ? "As Soon As Possible delivery (~2 hrs)" : `Delivery slot: ${order.slot_label || "-"}`}
+          {order.delivery_type === "express" || order.delivery_type === "asap" ? <Zap className="h-4 w-4 text-saffron" /> : <Clock className="h-4 w-4 text-forest" />}
+          {order.delivery_type === "express" || order.delivery_type === "asap" ? "Get in 30 Minutes" : `Delivery slot: ${order.slot_label || "-"}`}
         </div>
         <p className="mt-2 text-sm">Payment: <span className="font-medium">{order.payment_method === "cod" ? "Cash on Delivery" : "Online (Razorpay)"}</span> · <span className="capitalize">{order.payment_status}</span></p>
         <div className="mt-4 rounded-xl bg-cream p-4 text-sm">
@@ -151,7 +151,7 @@ export function OrderDetail() {
           <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{inr(order.subtotal)}</span></div>
           {order.coupon_discount > 0 && <div className="flex justify-between text-forest"><span>Coupon ({order.coupon_code})</span><span>-{inr(order.coupon_discount)}</span></div>}
           <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{inr(order.delivery_charge)}</span></div>
-          {order.asap_charge > 0 && <div className="flex justify-between text-saffron"><span>Priority (ASAP)</span><span>+{inr(order.asap_charge)}</span></div>}
+          {(order.express_charge ?? order.asap_charge) > 0 && <div className="flex justify-between text-saffron"><span>Get in 30 Minutes</span><span>+{inr(order.express_charge ?? order.asap_charge)}</span></div>}
           {order.delivery_discount > 0 && <div className="flex justify-between text-blue-700"><span>Delivery coupon ({order.delivery_coupon_code})</span><span>-{inr(order.delivery_discount)}</span></div>}
           {order.wallet_used > 0 && <div className="flex justify-between text-forest"><span>Wallet</span><span>-{inr(order.wallet_used)}</span></div>}
           <div className="flex justify-between pt-2 text-lg font-bold"><span>Total paid</span><span>{inr(order.final_amount)}</span></div>

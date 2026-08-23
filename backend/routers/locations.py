@@ -8,8 +8,7 @@ router = APIRouter()
 
 DEFAULT_SETTINGS = {
     "operating_start": "09:00", "operating_end": "21:00", "slot_duration_minutes": 60,
-    "prep_time_minutes": 90, "max_orders_per_slot": 10, "asap_enabled": True,
-    "asap_charge": 100, "holidays": [],
+    "prep_time_minutes": 90, "max_orders_per_slot": 10, "holidays": [],
 }
 
 

@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend-only E2E verification of the ASAP -> 'Get in 30 Minutes' per-PIN delivery rework (admin PIN config, admin delivery/orders/analytics/stats, customer checkout enabled+disabled PIN, express order placement, slot regression). 10/11 checks passed. Only failure: three leftover customer-facing 'As-Soon-As-Possible' / 'As Soon As Possible' copy strings on the storefront Home hero, Home features section and the Footer.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "store/Home.js (hero subtitle line 52 & feature blurb line 153)", "issue": "Customer-facing copy still says 'As-Soon-As-Possible delivery' / 'Choose As-Soon-As-Possible delivery at checkout for priority handling.' — violates requirement of zero ASAP terminology; should read 'Get in 30 Minutes' (and note it is PIN-dependent)", "selector": "section hero text / features grid", "priority": "HIGH"},
+      {"component": "components/store/Footer.js line 27", "issue": "Footer 'Delivery' column reads: Slot-based delivery with an express \"As Soon As Possible\" option in select areas. — must be reworded to 'Get in 30 Minutes'", "selector": "footer", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_passing": [
+    "Admin > PIN Codes table has 'Normal Delivery' and '30-Min Delivery' columns; 520003=Rs100, 520004=Rs100, 520005='Not available' (matches seed spec)",
+    "Add/Edit PIN dialog: 'Get in 30 Minutes available' toggle; '30-minute delivery charge' input appears only when ON; separate 'Normal delivery charge' field; no ASAP text in dialog",
+    "PIN persistence: toggled 520005 ON with Rs75 -> table showed Rs75 after reload; reverted OFF -> 'Not available' (state restored)",
+    "Admin > Delivery Charges & Slots: no ASAP toggle/section; helper text says '(Get in 30 Minutes is configured per PIN code.)'",
+    "Customer checkout with PIN 520004: 'delivery-express-option' card visible with 'Get in 30 Minutes · +Rs100'; selecting it added Rs100 (699+40+100 = Rs839 order total)",
+    "Express COD order placed successfully -> order FG260800041, order page shows 'Priority' badge, 'Get in 30 Minutes', Rs100 line, total Rs839",
+    "Customer checkout with PIN 520005: express card count = 0, only 'Scheduled Slot' offered (auto fallback works)",
+    "Slot regression: slot order FG260800042 placed COD, total Rs739, order page shows 'Delivery slot: 08:00 AM - 09:00 AM'",
+    "Admin Orders list: FG260800041 shows '30-Min' tag (with bolt icon) instead of slot; FG260800042 shows slot label",
+    "AdminOrderDetail: '30-Min Delivery' badge, 'Delivery: Get in 30 Minutes', '30-min delivery charge Rs100' in Payment Summary; slot order shows 'Scheduled' + slot label",
+    "No ASAP text in admin orders/order detail/delivery/delivery-stats/analytics/coupons; Analytics shows '30-MIN REVENUE Rs1,000'; PIN stats has '30-MIN ORDERS' + per-PIN '30-Min' column; coupon delivery scope option code = '30-Min only'"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Replace ASAP copy in /app/frontend/src/pages/store/Home.js (lines 52 and 153) with 'Get in 30 Minutes' wording",
+    "Replace ASAP copy in /app/frontend/src/components/store/Footer.js line 27 with 'Get in 30 Minutes' wording"
+  ],
+  "critical_code_review_comments": [
+    "grep for 'as.soon.as.possible' (hyphenated variants) — a plain 'ASAP' grep misses 'As-Soon-As-Possible' used in Home.js",
+    "Backward-compat rendering of legacy delivery_type='asap'/asap_charge in Orders.js and AdminOrderDetail.js is intentional and fine; consider a one-time data migration to drop the legacy keys"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (skipped per request)", "frontend": "91% (10/11 checks)"},
+  "seed_data_creation": "Created 2 customer addresses for customer@test.com ('QA Express' pincode 520004, 'QA NoExpress' pincode 520005) and 2 orders (FG260800041 express Rs839, FG260800042 slot Rs739). Not deleted - no UI delete path used; please clean up if desired. PIN 520005 express flag was toggled and reverted back to disabled.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin prudhvirajm847@gmail.com / Admin@12345; customer customer@test.com / Test@12345",
+  "context_for_next_testing_agent": "Get-in-30 per-PIN flow is fully working end-to-end in UI. Only remaining work is copy cleanup in Home.js + Footer.js. Test cart may contain leftover items for customer@test.com.",
+  "rca_of_the_issue": "The ASAP->'Get in 30 Minutes' rename covered checkout/orders/admin components but missed static marketing copy in the storefront Home hero/features and Footer, where the string is hyphenated ('As-Soon-As-Possible'), so a simple 'ASAP' search did not surface it."
+}

@@ -80,7 +80,7 @@ export default function AdminOrders() {
               <tr key={o.id} className={`border-t align-top ${!o.accepted && o.status === "pending" ? "bg-orange-50" : ""}`} data-testid={`admin-order-${o.id}`}>
                 <td className="px-4 py-2"><button onClick={() => navigate(`/admin/orders/${o.id}`)} className="font-medium text-forest hover:underline" data-testid={`open-order-${o.id}`}>{o.order_number}</button><p className="text-xs text-slate-400">{new Date(o.created_at).toLocaleString()}</p></td>
                 <td className="px-4 py-2">{o.customer_name}<p className="text-xs text-slate-400">{o.customer_phone}</p></td>
-                <td className="px-4 py-2">{o.is_priority ? <span className="flex items-center gap-1 text-saffron"><Zap className="h-3 w-3" />ASAP</span> : (o.slot_label || "-")}</td>
+                <td className="px-4 py-2">{o.is_priority ? <span className="flex items-center gap-1 text-saffron"><Zap className="h-3 w-3" />30-Min</span> : (o.slot_label || "-")}</td>
                 <td className="px-4 py-2">{inr(o.final_amount)}</td>
                 <td className="px-4 py-2"><Badge variant="outline">{o.payment_method.toUpperCase()}</Badge><p className="text-xs capitalize text-slate-400">{o.payment_status}</p></td>
                 <td className="px-4 py-2">

@@ -64,7 +64,7 @@ export default function AdminOrderDetail() {
           {!order.accepted && order.status === "pending" && (
             <Button className="bg-forest hover:bg-forest-dark" onClick={accept} data-testid="accept-order-btn"><Check className="mr-1 h-4 w-4" />Accept Order</Button>
           )}
-          <Badge className={order.is_priority ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"}>{order.is_priority ? "ASAP" : "Scheduled"}</Badge>
+          <Badge className={order.is_priority ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"}>{order.is_priority ? "30-Min Delivery" : "Scheduled"}</Badge>
           <Badge className="bg-forest-light text-forest">{order.customer_status}</Badge>
         </div>
       </div>
@@ -126,7 +126,7 @@ export default function AdminOrderDetail() {
             <div className="mt-3 space-y-0.5 text-slate-500">
               <p data-testid="order-service-area">Service area: <span className="text-slate-700">{order.location_name}</span></p>
               <p data-testid="order-pincode">PIN code: <span className="text-slate-700">{order.pincode || order.address?.pincode || "—"}</span></p>
-              <p data-testid="order-delivery">Delivery: <span className="text-slate-700">{order.delivery_type === "asap" ? "ASAP (~2 hrs)" : (order.slot_label || "—")}</span></p>
+              <p data-testid="order-delivery">Delivery: <span className="text-slate-700">{order.delivery_type === "express" || order.delivery_type === "asap" ? "Get in 30 Minutes" : (order.slot_label || "—")}</span></p>
             </div>
             <div className="mt-3 border-t pt-3">
               <p className="mb-2 text-xs font-medium text-slate-500">Delivery location &amp; actions</p>
@@ -149,7 +149,7 @@ export default function AdminOrderDetail() {
             <Row l="Subtotal" v={inr(order.subtotal)} />
             {order.coupon_discount > 0 && <Row l={`Coupon ${order.coupon_code || ""}`} v={`- ${inr(order.coupon_discount)}`} muted />}
             <Row l="Delivery" v={order.free_delivery_applied ? "FREE" : inr(order.delivery_charge)} />
-            {order.asap_charge > 0 && <Row l="ASAP charge" v={inr(order.asap_charge)} />}
+            {(order.express_charge ?? order.asap_charge) > 0 && <Row l="30-min delivery charge" v={inr(order.express_charge ?? order.asap_charge)} />}
             {order.delivery_discount > 0 && <Row l={`Delivery coupon ${order.delivery_coupon_code || ""}`} v={`- ${inr(order.delivery_discount)}`} muted />}
             {order.wallet_used > 0 && <Row l="Wallet used" v={`- ${inr(order.wallet_used)}`} muted />}
             <div className="my-2 border-t" />

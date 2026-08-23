@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EMPTY = {
-  pincode: "", location_id: "", area_name: "", is_serviceable: true, asap_enabled: true,
+  pincode: "", location_id: "", area_name: "", is_serviceable: true, express_enabled: false, express_charge: "",
   min_order_value: 0, delivery_charge: "", free_delivery_threshold: "", discount_type: "none",
   discount_value: 0, max_discount: "", notes: "",
 };
@@ -37,6 +37,7 @@ export default function AdminPinCodes() {
       ...form,
       min_order_value: Number(form.min_order_value) || 0,
       delivery_charge: form.delivery_charge === "" ? null : Number(form.delivery_charge),
+      express_charge: form.express_charge === "" ? null : Number(form.express_charge),
       free_delivery_threshold: form.free_delivery_threshold === "" ? null : Number(form.free_delivery_threshold),
       discount_type: form.discount_type === "none" ? null : form.discount_type,
       discount_value: Number(form.discount_value) || 0,
@@ -59,7 +60,7 @@ export default function AdminPinCodes() {
 
       <div className="mt-6 overflow-x-auto rounded-xl border bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500"><tr><th className="p-3">PIN</th><th className="p-3">Parent Location</th><th className="p-3">Min Order</th><th className="p-3">Delivery</th><th className="p-3">Discount</th><th className="p-3">Status</th><th className="p-3"></th></tr></thead>
+          <thead className="bg-slate-50 text-left text-slate-500"><tr><th className="p-3">PIN</th><th className="p-3">Parent Location</th><th className="p-3">Min Order</th><th className="p-3">Normal Delivery</th><th className="p-3">30-Min Delivery</th><th className="p-3">Discount</th><th className="p-3">Status</th><th className="p-3"></th></tr></thead>
           <tbody>
             {pins.map((p) => (
               <tr key={p.id} className="border-t" data-testid={`pincode-row-${p.id}`}>
@@ -67,10 +68,11 @@ export default function AdminPinCodes() {
                 <td className="p-3 text-slate-600">{locName(p.location_id)}</td>
                 <td className="p-3">{inr(p.min_order_value)}</td>
                 <td className="p-3">{p.delivery_charge == null ? "Default" : inr(p.delivery_charge)}</td>
+                <td className="p-3">{p.express_enabled ? inr(p.express_charge || 0) : <span className="text-slate-400">Not available</span>}</td>
                 <td className="p-3">{p.discount_type ? `${p.discount_value}${p.discount_type === "percentage" ? "%" : "₹"}` : "—"}</td>
                 <td className="p-3">{p.is_serviceable ? <Badge className="bg-forest-light text-forest">Serviceable</Badge> : <Badge variant="secondary">Not serviceable</Badge>}</td>
                 <td className="p-3 text-right">
-                  <button className="mr-3" onClick={() => { setEditing(p); setForm({ ...p, delivery_charge: p.delivery_charge ?? "", free_delivery_threshold: p.free_delivery_threshold ?? "", asap_enabled: p.asap_enabled ?? true, discount_type: p.discount_type || "none", max_discount: p.max_discount ?? "" }); setOpen(true); }} data-testid={`edit-pincode-${p.id}`}><Pencil className="h-4 w-4 text-slate-500 hover:text-forest" /></button>
+                  <button className="mr-3" onClick={() => { setEditing(p); setForm({ ...p, delivery_charge: p.delivery_charge ?? "", free_delivery_threshold: p.free_delivery_threshold ?? "", express_enabled: p.express_enabled ?? false, express_charge: p.express_charge ?? "", discount_type: p.discount_type || "none", max_discount: p.max_discount ?? "" }); setOpen(true); }} data-testid={`edit-pincode-${p.id}`}><Pencil className="h-4 w-4 text-slate-500 hover:text-forest" /></button>
                   <button onClick={() => del(p.id)} data-testid={`delete-pincode-${p.id}`}><Trash2 className="h-4 w-4 text-slate-500 hover:text-destructive" /></button>
                 </td>
               </tr>
@@ -96,7 +98,7 @@ export default function AdminPinCodes() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Min order value (₹)</Label><Input type="number" value={form.min_order_value} onChange={(e) => setForm({ ...form, min_order_value: e.target.value })} /></div>
-              <div><Label>Delivery charge (₹)</Label><Input type="number" placeholder="Default" value={form.delivery_charge} onChange={(e) => setForm({ ...form, delivery_charge: e.target.value })} /></div>
+              <div><Label>Normal delivery charge (₹)</Label><Input type="number" placeholder="Default" value={form.delivery_charge} onChange={(e) => setForm({ ...form, delivery_charge: e.target.value })} /></div>
             </div>
             <div>
               <Label>PIN-specific discount</Label>
@@ -116,7 +118,10 @@ export default function AdminPinCodes() {
               </div>
             )}
             <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_serviceable} onCheckedChange={(v) => setForm({ ...form, is_serviceable: v })} data-testid="pincode-serviceable" />Serviceable</label>
-            <label className="flex items-center gap-2 text-sm"><Switch checked={form.asap_enabled} onCheckedChange={(v) => setForm({ ...form, asap_enabled: v })} data-testid="pincode-asap" />ASAP delivery available</label>
+            <label className="flex items-center gap-2 text-sm"><Switch checked={form.express_enabled} onCheckedChange={(v) => setForm({ ...form, express_enabled: v })} data-testid="pincode-express" />Get in 30 Minutes available</label>
+            {form.express_enabled && (
+              <div><Label>30-minute delivery charge (₹)</Label><Input type="number" data-testid="pincode-express-charge" placeholder="e.g. 100" value={form.express_charge} onChange={(e) => setForm({ ...form, express_charge: e.target.value })} /></div>
+            )}
             <div><Label>Free delivery above (₹)</Label><Input type="number" data-testid="pincode-free-threshold" placeholder="Optional" value={form.free_delivery_threshold} onChange={(e) => setForm({ ...form, free_delivery_threshold: e.target.value })} /></div>
           </div>
           <DialogFooter><Button className="bg-forest hover:bg-forest-dark" onClick={save} data-testid="save-pincode-btn">Save</Button></DialogFooter>

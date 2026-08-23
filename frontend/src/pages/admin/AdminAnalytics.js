@@ -103,7 +103,7 @@ export default function AdminAnalytics() {
             <Stat label="AOV" value={inr(ov.average_order_value)} />
             <Stat label="Cancelled" value={ov.cancelled_count} />
             <Stat label="Delivery Revenue" value={inr(ov.delivery_revenue)} />
-            <Stat label="ASAP Revenue" value={inr(ov.asap_revenue)} accent="text-saffron" />
+            <Stat label="30-Min Revenue" value={inr(ov.express_revenue)} accent="text-saffron" />
             <Stat label="Total Discounts" value={inr(ov.total_discount)} />
             <Stat label="Est. Profit" value={inr(ov.estimated_profit)} accent={ov.estimated_profit >= 0 ? "text-forest" : "text-red-500"} />
           </div>

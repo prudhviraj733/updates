@@ -24,7 +24,7 @@ export function Footer() {
           <div>
             <p className="font-semibold">Delivery</p>
             <p className="mt-3 text-sm text-white/70">
-              Slot-based delivery with an express "As Soon As Possible" option in select areas.
+              Slot-based delivery with a Get in 30 Minutes option in select areas.
             </p>
           </div>
         </div>
