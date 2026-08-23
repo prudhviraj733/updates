@@ -7,6 +7,7 @@ import { detectPlatform } from "@/lib/platform";
 
 import { AuthProvider } from "@/context/AuthContext";
 import { StoreProvider } from "@/context/StoreContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { StoreLayout } from "@/components/store/StoreLayout";
 import { AdminLayout } from "@/components/admin/AdminLayout";
@@ -24,6 +25,7 @@ import Wallet from "@/pages/store/Wallet";
 import Referral from "@/pages/store/Referral";
 import ComboDetail from "@/pages/store/ComboDetail";
 import ReturnFlow from "@/pages/store/ReturnFlow";
+import Notifications from "@/pages/store/Notifications";
 import { Orders, OrderDetail } from "@/pages/store/Orders";
 
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -52,6 +54,7 @@ import AdminPayments from "@/pages/admin/AdminPayments";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminReferrals from "@/pages/admin/AdminReferrals";
 import AdminReturns from "@/pages/admin/AdminReturns";
+import AdminNotifications from "@/pages/admin/AdminNotifications";
 
 function App() {
   useEffect(() => {
@@ -67,6 +70,7 @@ function App() {
     <div className="App">
       <AuthProvider>
         <StoreProvider>
+          <NotificationProvider>
           <BrowserRouter>
             <Toaster position="top-center" richColors />
             <Routes>
@@ -90,6 +94,7 @@ function App() {
                 <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
                 <Route path="/orders/:id" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
                 <Route path="/orders/:id/return" element={<ProtectedRoute><ReturnFlow /></ProtectedRoute>} />
+                <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
                 <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
               </Route>
 
@@ -98,6 +103,7 @@ function App() {
                 <Route index element={<AdminDashboard />} />
                 <Route path="orders" element={<AdminOrders />} />
                 <Route path="returns" element={<AdminReturns />} />
+                <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="orders/:id" element={<AdminOrderDetail />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="categories" element={<AdminCategories />} />
@@ -124,6 +130,7 @@ function App() {
               </Route>
             </Routes>
           </BrowserRouter>
+          </NotificationProvider>
         </StoreProvider>
       </AuthProvider>
     </div>

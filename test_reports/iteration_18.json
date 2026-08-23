@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only E2E testing of the new Notification Center (admin compose/history + customer bell/panel/page) on the public preview URL with Playwright. Admin: login, sidebar 'Notifications' nav, compose+send to All / Segment / Selected customers, schedule + cancel, empty-form validation, page reload persistence. Customer: bell + unread badge, panel list, deep-link navigation + auto mark-read, mark-all-read (bell and page), read-state persistence across reload, /notifications full page. Regression: storefront home, /products, /offers and admin dashboard all load fine. All tested flows passed; no functional defects found. Backend was not re-tested (per request).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin > Notifications (compose)", "issues": ["Schedule field uses the native browser datetime-local picker (mm/dd/yyyy, --:-- --) instead of the shadcn calendar/time component used elsewhere in the app - inconsistent look and locale (US format while rest of app uses en-IN).", "Sent campaigns cannot be removed/archived from History; list will grow unbounded (only 'scheduled' items get a Cancel action). Acknowledged as acceptable, noted for future."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional polish: replace native datetime-local schedule input with the app's shadcn date/time picker for consistency.",
+    "Optional: after markRead/markAllRead in NotificationContext, call refreshCount() to re-sync with server instead of relying purely on optimistic decrement (verified correct today, but drift is possible with multi-tab usage).",
+    "Optional perf: GET /api/admin/notifications/segments recomputes every segment sequentially (6 x full-collection scans per page load); consider a single aggregation or caching."
+  ],
+  "critical_code_review_comments": [
+    "NotificationBell/Notifications page correctly gate on auth and use data-testids; no issues found.",
+    "Admin history 'read' count and recipient count render correctly from campaign docs; MongoDB _id is excluded in all notification endpoints (verified via responses rendering cleanly)."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "not tested (skipped per request)", "frontend": "100% (12/12 flows passed)" },
+  "seed_data_creation": "Created 4 test campaigns from admin UI: TEST_ALL Weekend Deals (all, sent, 9 recipients), TEST_SEG Segment blast (segment 'new', sent, 4), TEST_SEL Selected blast (customer@test.com, sent, 1, deep_link=/offers), TEST_SCH Scheduled blast (scheduled 25/12/2026 then CANCELLED as cleanup). Sent campaigns remain in history/customer inbox (no UI delete, accepted).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345 (working); Customer customer@test.com / Test@12345 (working)",
+  "context_for_next_testing_agent": "Notification Center verified end-to-end in UI. Note two test-script gotchas: (1) selector [data-testid^=\"notif-customer-\"] also matches the search input 'notif-customer-search' - use label[data-testid^=\"notif-customer-\"] for customer rows; (2) after a deep-link click closes the bell popover, re-clicking the bell needs wait_for_selector('[data-testid=\"notification-panel\"]') before asserting mark-all-read, otherwise it appears missing (one flaky occurrence, passed on retry). Test data TEST_ALL/TEST_SEG/TEST_SEL notifications exist in customer@test.com inbox (all marked read).",
+  "flaky_tests": ["notification-mark-all-read not found on first attempt when the bell was re-opened immediately after deep-link navigation without waiting for the panel; passed on retry (1/2 runs)"],
+  "rca_of_the_issue": "No product defects reproduced. The single initial failure was a test-side timing/selector issue (see context_for_next_testing_agent)."
+}

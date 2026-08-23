@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { Search, ShoppingCart, MapPin, User, ChevronDown, Menu, Heart, Package, Ticket, Wallet, Gift } from "lucide-react";
 import { useStore } from "@/context/StoreContext";
 import { useAuth } from "@/context/AuthContext";
+import { NotificationBell } from "@/components/store/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -61,6 +62,8 @@ export function Header() {
           <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate("/wishlist")} data-testid="wishlist-nav">
             <Heart className="h-5 w-5" />
           </Button>
+
+          <NotificationBell />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

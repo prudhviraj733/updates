@@ -242,6 +242,16 @@ async def send_payment_receipt(order: dict) -> None:
     except Exception as e:
         logger.error(f"receipt email error: {e}")
 
+    try:
+        from routers.notifications_center import create_user_notification
+        await create_user_notification(
+            order["user_id"], "Payment successful",
+            f"We've received your payment for order {order_no}.",
+            deep_link=f"/orders/{order.get('id')}", ntype="payment",
+            data={"order_id": order.get("id")})
+    except Exception as e:
+        logger.error(f"in-app payment notify error: {e}")
+
 
 async def notify_order(order: dict, status: str) -> None:
     title, line = STATUS_MESSAGES.get(status, ("Order update", f"Your order status is now {status}."))
@@ -286,3 +296,13 @@ async def notify_order(order: dict, status: str) -> None:
         await send_email(to=email, subject=f"{EMAIL_FROM_NAME}: {title} ({order_no})", html=html)
     except Exception as e:
         logger.error(f"notify email error: {e}")
+
+    # In-app notification + Android push (shared web/mobile notification system)
+    try:
+        from routers.notifications_center import create_user_notification
+        await create_user_notification(
+            order["user_id"], title, line,
+            deep_link=f"/orders/{order.get('id')}", ntype="order",
+            data={"order_id": order.get("id"), "order_number": order_no, "status": status})
+    except Exception as e:
+        logger.error(f"in-app order notify error: {e}")

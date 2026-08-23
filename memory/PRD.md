@@ -328,3 +328,14 @@ Platform Usage (Website vs App) — real data only:
 - ROOT CAUSE: (1) frontend/src/lib/api.js baked `${REACT_APP_BACKEND_URL}/api` -> literal "undefined/api" when build arg unset; (2) docker-compose delivered backend vars only via ${VAR} interpolation -> JWT_SECRET/auth vars empty when deploy/.env not picked up.
 - FIX (minimal, no feature change): api.js now strips trailing slash and falls back to same-origin relative "/api"; deploy/docker-compose.yml backend now uses `env_file: - .env` (fails fast if missing, always delivers runtime vars); deploy/.env.example REACT_APP_BACKEND_URL blank recommended for single-domain (handles apex+www), CORS_ORIGINS includes www.
 - VERIFIED: register/login/session 200 end-to-end; api base logic unset->/api, set->absolute; compose YAML valid.
+
+## 2026-08-23 — Admin Notification Center + FCM-ready notifications
+- Shared notification system (web + future Android): backend routers/notifications_center.py, core/fcm.py.
+- Admin: compose (title/message/image/deep-link/type), target all/selected/segment(new,active,inactive,high_value,with_wallet), send-now or schedule; history with recipient/read/push counts + cancel scheduled.
+- Customer: bell + unread badge + panel (NotificationBell.js), full /notifications page, mark-read/all.
+- Device tokens: PUT/DELETE /api/me/device-tokens (multi-device). FCM push via firebase-admin, graceful no-op until FIREBASE_SERVICE_ACCOUNT_JSON set.
+- Automatic notifications: order lifecycle (notify_order), payment success/failure (payments.py + notifications.py), refund/replacement (returns.py).
+- Scheduling via .emergent/crons.yml (every 15m) -> POST /api/cron/dispatch-notifications (auth via WEBHOOK_CRON_SECRET).
+- New env: FIREBASE_SERVICE_ACCOUNT_JSON, WEBHOOK_CRON_SECRET (backend/.env + deploy/.env.example + docker-compose env_file). requirements.txt frozen with firebase-admin 7.5.0.
+- VERIFIED: backend 11/11 curl flows; frontend testing agent 12/12 (iteration_18.json). Test data cleaned.
+- PENDING (user/account): supply Firebase service-account JSON to enable real Android push; Android app itself is still a scaffold (must be built to receive closed-app push).

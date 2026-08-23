@@ -17,7 +17,9 @@ from routers import (
     cart, wishlist, delivery, orders, coupons, payments, packages,
     settings, admin_misc, uploads, combo_banners, personalization,
     brands, pincodes, analytics, wallet, referral, customers, returns, usage,
+    notifications_center,
 )
+from core.fcm import init_fcm
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -34,7 +36,8 @@ async def root():
 for module in (auth, addresses, locations, categories, products, inventory,
                cart, wishlist, delivery, orders, coupons, payments, packages,
                settings, admin_misc, uploads, combo_banners, personalization,
-               brands, pincodes, analytics, wallet, referral, customers, returns, usage):
+               brands, pincodes, analytics, wallet, referral, customers, returns, usage,
+               notifications_center):
     app.include_router(module.router, prefix="/api")
 
 
@@ -76,6 +79,11 @@ async def on_startup():
     await db.usage_pings.create_index("day")
     await db.visitors.create_index([("visitor_id", 1), ("platform", 1)], unique=True)
     await db.orders.create_index("platform")
+    await db.device_tokens.create_index([("user_id", 1), ("token", 1)], unique=True)
+    await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+    await db.notifications.create_index("campaign_id")
+    await db.notification_campaigns.create_index([("status", 1), ("scheduled_at", 1)])
+    init_fcm()
     await run_seed()
     try:
         from routers.uploads import init_storage

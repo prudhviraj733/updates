@@ -358,6 +358,18 @@ async def update_return_status(request_id: str, payload: ReturnStatusUpdateInput
     except Exception:
         pass
 
+    # In-app notification + push
+    try:
+        from routers.notifications_center import create_user_notification
+        label = CUSTOMER_LABELS.get(new, new)
+        await create_user_notification(
+            r["user_id"], f"{r['type'].capitalize()} {label}",
+            f"{r['product_name']} × {r['quantity']} — request {r['request_number']}.",
+            deep_link=f"/orders/{r.get('order_id')}", ntype="refund",
+            data={"request_id": request_id, "order_id": r.get("order_id")})
+    except Exception:
+        pass
+
     return _with_labels(updated)
 
 

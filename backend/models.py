@@ -101,6 +101,25 @@ class PhoneOtpVerifyInput(BaseModel):
     otp: str
 
 
+# ---------- Notifications ----------
+class DeviceTokenInput(BaseModel):
+    token: str = Field(min_length=10, max_length=4096)
+    platform: str = "android"          # android | ios | web
+    device_id: Optional[str] = None
+
+
+class NotificationComposeInput(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(min_length=1, max_length=1000)
+    image: Optional[str] = None
+    deep_link: Optional[str] = None            # e.g. /orders/{id}, /product/{id}, /offers
+    type: str = "announcement"                 # announcement | offer | order | payment | refund | general
+    target_type: str = "all"                   # all | selected | segment
+    customer_ids: List[str] = []
+    segment: Optional[str] = None              # new | active | inactive | high_value | with_wallet
+    scheduled_at: Optional[str] = None         # ISO8601; empty/near-now = send immediately
+
+
 # ---------- Address ----------
 class AddressInput(BaseModel):
     label: str = "Home"

@@ -75,6 +75,16 @@ async def verify_payment(body: dict, user: dict = Depends(get_current_user)):
     except Exception:
         await db.orders.update_one({"razorpay_order_id": params["razorpay_order_id"]},
                                    {"$set": {"payment_status": "failed", "updated_at": now_iso()}})
+        try:
+            o = await db.orders.find_one({"razorpay_order_id": params["razorpay_order_id"]}, {"_id": 0})
+            if o:
+                from routers.notifications_center import create_user_notification
+                await create_user_notification(
+                    o["user_id"], "Payment failed",
+                    f"Your payment for order {o.get('order_number')} could not be completed. Please try again.",
+                    deep_link=f"/orders/{o.get('id')}", ntype="payment")
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail="Payment verification failed")
     await db.orders.update_one(
         {"razorpay_order_id": params["razorpay_order_id"], "user_id": user["id"]},
@@ -150,5 +160,13 @@ async def webhook(request: Request):
             await db.payments.update_one(
                 {"razorpay_order_id": rzp_order_id},
                 {"$set": {"status": "failed", "razorpay_payment_id": rzp_payment_id, "source": "webhook"}})
+            try:
+                from routers.notifications_center import create_user_notification
+                await create_user_notification(
+                    order["user_id"], "Payment failed",
+                    f"Your payment for order {order.get('order_number')} could not be completed. Please try again.",
+                    deep_link=f"/orders/{order.get('id')}", ntype="payment")
+            except Exception:
+                pass
 
     return {"status": "ok"}

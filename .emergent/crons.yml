@@ -1,0 +1,8 @@
+crons:
+  - name: dispatch-notifs
+    description: "Sends admin notifications that were scheduled for a future time once they are due"
+    cron: "*/15 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/dispatch-notifications"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
