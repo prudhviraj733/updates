@@ -348,3 +348,12 @@ Platform Usage (Website vs App) — real data only:
 - Backward-compat: legacy orders/coupons with delivery_type/scope "asap" and asap_charge still render as "Get in 30 Minutes" and count in revenue.
 - Migration run on existing pincodes (520003/520004 enabled Rs100, 520005 disabled); slots no longer expose asap.
 - VERIFIED: backend API E2E (express order 699+40+100=839, disabled-PIN 400, analytics express_revenue, slots no asap); frontend testing agent iteration_19.json 10/11 then fixed remaining Home/Footer copy. Test data cleaned.
+
+## 2026-08-24 — Android app (Expo) + auth token API + SEO/lockup fixes
+- Backend (additive, web unaffected): /auth/login & /auth/register now also return {token, refresh_token} for mobile Bearer auth; /auth/refresh accepts refresh token via body/Bearer and returns new token. get_current_user already supported Bearer.
+- Login lockout hardened: rolling window (stale failures reset after 15m), locks only at 5 attempts, clear 429 retry messages.
+- SEO: react-helmet-async per-page meta/OG/Twitter + JSON-LD (Organization, Product); backend /api/seo/robots.txt + /api/seo/sitemap.xml (nginx maps /robots.txt + /sitemap.xml); removed duplicate static meta from index.html.
+- FCM: backend live (project bestkart-d4cbf) via FIREBASE_SERVICE_ACCOUNT_JSON in backend/.env (git-ignored). init True, authenticates with Firebase.
+- Android app at /app/mobile (Expo SDK 51): SecureStore Bearer auth + auto-refresh, Home/PIN serviceability, Shop+search+filters, ProductDetail, Cart, Checkout (slot + Get-in-30 per PIN + coupon + COD + Razorpay via WebView->verify), Orders/OrderDetail, Account+addresses+wallet, Offers, Notifications, FCM device-token registration (getDevicePushTokenAsync -> PUT /me/device-tokens) + deep-link tap handling. app.json (package in.bestkart.app), eas.json (AAB profile), README with build/FCM/AAB steps.
+- CANNOT test in this env: Android emulator/AAB build/on-device push require user machine + google-services.json + physical device. All backend endpoints the app uses are curl-verified.
+- Web app verified still healthy + compiling after all changes.

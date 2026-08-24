@@ -8,6 +8,7 @@ import { detectPlatform } from "@/lib/platform";
 import { AuthProvider } from "@/context/AuthContext";
 import { StoreProvider } from "@/context/StoreContext";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { HelmetProvider } from "react-helmet-async";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { StoreLayout } from "@/components/store/StoreLayout";
 import { AdminLayout } from "@/components/admin/AdminLayout";
@@ -68,6 +69,7 @@ function App() {
   }, []);
   return (
     <div className="App">
+      <HelmetProvider>
       <AuthProvider>
         <StoreProvider>
           <NotificationProvider>
@@ -133,6 +135,7 @@ function App() {
           </NotificationProvider>
         </StoreProvider>
       </AuthProvider>
+      </HelmetProvider>
     </div>
   );
 }

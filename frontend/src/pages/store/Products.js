@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import api, { inr } from "@/lib/api";
+import { Seo } from "@/components/Seo";
 import { useStore } from "@/context/StoreContext";
 import { ProductCard } from "@/components/store/ProductCard";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -178,6 +179,11 @@ export default function Products() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <Seo
+        title={search ? `Search: ${search}` : activeCat ? activeCat.name : "All Products"}
+        description={activeCat ? `Buy ${activeCat.name} online at BestKart with fast delivery.` : "Browse rice, dals, oils, spices, dry fruits and daily essentials at BestKart."}
+        path="/products"
+      />
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-heading text-3xl font-bold">
           {search ? `Results for "${search}"` : activeCat ? activeCat.name : "All Products"}

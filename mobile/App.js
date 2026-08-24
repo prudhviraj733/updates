@@ -1,28 +1,28 @@
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useRef } from "react";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider } from "./src/context/AuthContext";
 import { StoreProvider } from "./src/context/StoreContext";
-import LoginScreen from "./src/screens/LoginScreen";
-import HomeScreen from "./src/screens/HomeScreen";
-import ProductsScreen from "./src/screens/ProductsScreen";
+import { NotificationProvider } from "./src/context/NotificationContext";
+import RootNavigator from "./src/navigation/RootNavigator";
 
-const Stack = createNativeStackNavigator();
+export const navigationRef = createNavigationContainerRef();
 
 export default function App() {
   return (
-    <AuthProvider>
-      <StoreProvider>
-        <NavigationContainer>
-          <StatusBar style="light" />
-          <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: "#1B4332" }, headerTintColor: "#fff" }}>
-            <Stack.Screen name="Home" component={HomeScreen} options={{ title: "Freshly" }} />
-            <Stack.Screen name="Products" component={ProductsScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </StoreProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <StoreProvider>
+          <NotificationProvider navigationRef={navigationRef}>
+            <NavigationContainer ref={navigationRef}>
+              <StatusBar style="light" />
+              <RootNavigator />
+            </NavigationContainer>
+          </NotificationProvider>
+        </StoreProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

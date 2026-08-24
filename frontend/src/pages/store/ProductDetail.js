@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Heart, Minus, Plus, ShoppingCart, ArrowLeft, Truck, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import api, { inr } from "@/lib/api";
+import { Seo } from "@/components/Seo";
 import { useStore } from "@/context/StoreContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,28 @@ export default function ProductDetail() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <Seo
+        title={product.name}
+        description={(product.description || `Buy ${product.name} online at BestKart.`).slice(0, 160)}
+        image={product.images?.[0]}
+        path={`/product/${product.id}`}
+        type="product"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: product.name,
+          image: product.images || [],
+          description: product.description || "",
+          brand: { "@type": "Brand", name: product.brand_name || "BestKart" },
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "INR",
+            price: product.selling_price,
+            availability: (product.in_stock === false || product.stock === 0)
+              ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
+          },
+        }}
+      />
       <button onClick={() => navigate(-1)} className="mb-6 flex items-center gap-2 text-sm text-muted-foreground hover:text-forest" data-testid="back-btn">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>

@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /checkout
+Disallow: /account
+Disallow: /orders
+Disallow: /wallet
+Disallow: /notifications
+Disallow: /my-coupons
+Disallow: /referral
+
+Sitemap: https://bestkart.in/sitemap.xml

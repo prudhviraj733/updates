@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, Truck, Clock, ShieldCheck, Zap } from "lucide-react";
 import api from "@/lib/api";
+import { Seo } from "@/components/Seo";
 import { useStore } from "@/context/StoreContext";
 import { ProductCard } from "@/components/store/ProductCard";
 import { ComboCarousel } from "@/components/store/ComboCarousel";
@@ -35,6 +36,17 @@ export default function Home() {
 
   return (
     <div>
+      <Seo
+        title=""
+        path="/"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "BestKart",
+          url: typeof window !== "undefined" ? window.location.origin : "https://bestkart.in",
+          description: "Online grocery delivery for rice, dals, oils, spices, dry fruits and daily essentials.",
+        }}
+      />
       {/* Hero */}
       <section className="relative overflow-hidden bg-forest">
         <div className="absolute -right-20 -top-20 h-80 w-80 rounded-full bg-saffron/20 blur-3xl" />

@@ -1,47 +1,59 @@
-# Freshly Grocery — Customer Mobile App (React Native / Expo)
+# BestKart — Android App (Expo / React Native)
 
-This is the **customer mobile application scaffold**. It uses the **same backend and database**
-as the responsive website and the admin dashboard — no separate database.
+A native Android customer app that reuses the **exact same production backend, APIs,
+authentication, catalog, cart, checkout, delivery rules and notifications** as the
+BestKart website. No separate backend or database.
 
-> This environment previews web apps only, so the React Native app is provided as a runnable
-> scaffold you build/run locally with Expo. It talks to the exact same FastAPI backend.
+## What's implemented
+- Email/password **register + login** with persistent auth (Bearer JWT stored in Expo SecureStore, auto token-refresh on 401).
+- **Home** with PIN-code serviceability check + per-PIN delivery charges + Get-in-30 availability, categories, featured products.
+- **Shop** with search + category filters, **product details**.
+- **Cart** (add / update qty / remove, per-PIN min-order guard) and **Checkout**:
+  - Delivery address selection + add address.
+  - **Normal scheduled slot** delivery and admin-controlled **Get in 30 Minutes** (only shown when the PIN enables it, with its charge).
+  - Coupons, **COD** and **Razorpay** online payment (Razorpay Checkout in a WebView → verified via the same `/payments/razorpay/verify` endpoint).
+- **Order history** + order detail (30-Min badge, charges, status).
+- **Account** (profile, mobile verified badge, wallet balance, address management), **Offers**, **Notifications** center.
+- **FCM push**: on login the device registers its **real native FCM token** (`getDevicePushTokenAsync`) to `PUT /api/me/device-tokens`. Push taps open **deep links** (`/orders/:id`, `/product/:id`, `/offers`, …).
+- Loading / empty / error / offline states throughout.
 
-## Architecture
+## Configure the backend URL
+The app points to production via `app.json → expo.extra.apiUrl` (default `https://bestkart.in`).
+Override at build time with `EXPO_PUBLIC_BACKEND_URL`. It calls `${apiUrl}/api/...` — identical to the web.
 
-- Same REST API as the web app (`/api/...`)
-- JWT auth (mobile stores the token via `AsyncStorage` and sends `Authorization: Bearer <token>`;
-  the backend already supports the Bearer header fallback in `get_current_user`).
-- Shared domain: locations, categories, products, cart, delivery slots, ASAP delivery, orders.
-
-## Screens (foldered under `src/screens`)
-
-- `LoginScreen` — sign in / register
-- `LocationScreen` — choose service location
-- `HomeScreen` — categories + featured products
-- `CategoryScreen` / product listing + search
-- `ProductScreen` — product details
-- `CartScreen`
-- `CheckoutScreen` — address, delivery slots + ASAP, payment method
-- `OrdersScreen`
-- `ProfileScreen`
-
-## Getting started (locally)
-
+## One-time setup (on your machine)
 ```bash
 cd mobile
-npm install
-# set your backend URL
-export EXPO_PUBLIC_BACKEND_URL="https://grocery-hub-1077.preview.emergentagent.com"
-npx expo start
+npm install -g eas-cli
+yarn install
+eas login                       # your Expo account
+eas init                        # creates the EAS project; put the printed projectId into app.json extra.eas.projectId
 ```
 
-## Files
+## Firebase / FCM (required for push)
+1. Firebase Console → Project **bestkart-d4cbf** → Add app → **Android**, package name **`in.bestkart.app`**.
+2. Download **`google-services.json`** and place it at `mobile/google-services.json` (already referenced in `app.json`).
+   - This is the CLIENT config (safe to embed). The backend already has the service-account key.
+3. FCM push only works in a real **dev/production build** (not Expo Go).
 
-- `app.json` — Expo config
-- `package.json` — dependencies
-- `src/api/client.js` — shared axios client + token handling
-- `src/context/AuthContext.js`, `src/context/StoreContext.js`
-- `App.js` — navigation container
+## Run / test
+```bash
+# Development build on a real Android device (needed for FCM tokens):
+eas build --profile development --platform android
+# install the APK on your phone, then:
+npx expo start --dev-client
+```
+- Log in → the app requests notification permission and registers the FCM token.
+- **End-to-end push test:** Admin panel → Notifications → send to "All customers" (or the test account).
+  Backend → Firebase → your device shows the notification even when the app is closed; tapping opens the deep-linked screen.
 
-The API contract is identical to the web app, so any endpoint used here is already implemented
-and tested in the backend.
+## Build a signed AAB for Google Play
+```bash
+eas build --profile production --platform android    # produces an .aab; EAS manages the signing keystore
+eas submit --profile production --platform android    # optional: upload to Play Console
+```
+`versionCode` auto-increments (see `eas.json`). App id: `in.bestkart.app`.
+
+## Notes
+- Payments run in Razorpay **TEST** mode until live keys are set on the backend.
+- The app never stores secrets; only the short-lived access token + refresh token in SecureStore.

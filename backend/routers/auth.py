@@ -79,10 +79,12 @@ async def register(payload: RegisterInput, request: Request, response: Response)
     }
     res = await db.users.insert_one(doc)
     uid = str(res.inserted_id)
-    set_auth_cookies(response, create_access_token(uid, email, "customer"),
-                     create_refresh_token(uid))
+    access = create_access_token(uid, email, "customer")
+    refresh_tok = create_refresh_token(uid)
+    set_auth_cookies(response, access, refresh_tok)
     return {"id": uid, "name": payload.name, "email": email, "phone": payload.phone,
-            "phone_verified": False, "role": "customer"}
+            "phone_verified": False, "role": "customer",
+            "token": access, "refresh_token": refresh_tok}
 
 
 def _client_ip(request: Request) -> str:
@@ -99,25 +101,35 @@ def _client_ip(request: Request) -> str:
 async def login(payload: LoginInput, request: Request, response: Response):
     email = payload.email.lower().strip()
     ip = _client_ip(request)
+    now = datetime.now(timezone.utc)
     # Lock primarily per-account (email) so the control works even when the
     # client IP is masked/rotated by the ingress proxy; IP is kept for logging.
     identifier = f"acct:{email}"
     attempt = await db.login_attempts.find_one({"identifier": identifier})
+    # Rolling window: forget stale failures so occasional typos never permanently
+    # lock out a legitimate user.
+    if attempt:
+        last = attempt.get("last_attempt_at")
+        if last and (now - datetime.fromisoformat(last)) > timedelta(minutes=LOCK_MINUTES):
+            await db.login_attempts.delete_one({"identifier": identifier})
+            attempt = None
     if attempt and attempt.get("count", 0) >= MAX_ATTEMPTS:
         locked_until = attempt.get("locked_until")
-        if locked_until and datetime.fromisoformat(locked_until) > datetime.now(timezone.utc):
-            raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+        if locked_until and datetime.fromisoformat(locked_until) > now:
+            mins = max(1, int((datetime.fromisoformat(locked_until) - now).total_seconds() // 60) + 1)
+            raise HTTPException(status_code=429,
+                                detail=f"Too many failed attempts. Please try again in {mins} minute(s).")
 
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
-        from datetime import timedelta
         count = (attempt.get("count", 0) if attempt else 0) + 1
-        await db.login_attempts.update_one(
-            {"identifier": identifier},
-            {"$set": {"count": count,
-                      "locked_until": (datetime.now(timezone.utc) + timedelta(minutes=LOCK_MINUTES)).isoformat()}},
-            upsert=True,
-        )
+        update = {"count": count, "last_attempt_at": now.isoformat()}
+        if count >= MAX_ATTEMPTS:
+            update["locked_until"] = (now + timedelta(minutes=LOCK_MINUTES)).isoformat()
+        await db.login_attempts.update_one({"identifier": identifier}, {"$set": update}, upsert=True)
+        if count >= MAX_ATTEMPTS:
+            raise HTTPException(status_code=429,
+                                detail=f"Too many failed attempts. Please try again in {LOCK_MINUTES} minutes.")
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     await db.login_attempts.delete_one({"identifier": identifier})
@@ -129,9 +141,12 @@ async def login(payload: LoginInput, request: Request, response: Response):
                                         "last_active_at": datetime.now(timezone.utc).isoformat()}})
     set_auth_cookies(response, create_access_token(uid, email, user["role"]),
                      create_refresh_token(uid))
+    access = create_access_token(uid, email, user["role"])
+    refresh_tok = create_refresh_token(uid)
+    set_auth_cookies(response, access, refresh_tok)
     return {"id": uid, "name": user["name"], "email": email,
             "phone": user.get("phone"), "phone_verified": user.get("phone_verified", False),
-            "role": user["role"]}
+            "role": user["role"], "token": access, "refresh_token": refresh_tok}
 
 
 @router.post("/auth/logout")
@@ -150,6 +165,16 @@ async def me(user: dict = Depends(get_current_user)):
 async def refresh(request: Request, response: Response):
     token = request.cookies.get("refresh_token")
     if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        try:
+            body = await request.json()
+            token = (body or {}).get("refresh_token")
+        except Exception:
+            token = None
+    if not token:
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
         payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
@@ -161,7 +186,7 @@ async def refresh(request: Request, response: Response):
         access = create_access_token(str(user["_id"]), user["email"], user["role"])
         response.set_cookie("access_token", access, httponly=True, secure=True,
                             samesite="none", max_age=86400, path="/")
-        return {"message": "refreshed"}
+        return {"message": "refreshed", "token": access}
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
