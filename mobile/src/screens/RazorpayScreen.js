@@ -26,7 +26,7 @@ export default function RazorpayScreen() {
     amount: ${JSON.stringify(rzp.amount)},
     currency: ${JSON.stringify(rzp.currency)},
     order_id: ${JSON.stringify(rzp.razorpay_order_id)},
-    name: "BestKart",
+    name: "SavingSmart",
     description: ${JSON.stringify(order.order_number)},
     prefill: { contact: ${JSON.stringify(contact || "")}, email: ${JSON.stringify(email || "")} },
     theme: { color: "#1B4332" },

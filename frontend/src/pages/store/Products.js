@@ -181,7 +181,7 @@ export default function Products() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <Seo
         title={search ? `Search: ${search}` : activeCat ? activeCat.name : "All Products"}
-        description={activeCat ? `Buy ${activeCat.name} online at BestKart with fast delivery.` : "Browse rice, dals, oils, spices, dry fruits and daily essentials at BestKart."}
+        description={activeCat ? `Buy ${activeCat.name} online at SavingSmart with fast delivery.` : "Browse rice, dals, oils, spices, dry fruits and daily essentials at SavingSmart."}
         path="/products"
       />
       <div className="flex items-center justify-between gap-3">

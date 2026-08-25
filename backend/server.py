@@ -25,12 +25,12 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Freshly Grocery API")
+app = FastAPI(title="SavingSmart Grocery API")
 
 
 @app.get("/api/")
 async def root():
-    return {"message": "Freshly Grocery API is running", "status": "ok"}
+    return {"message": "SavingSmart Grocery API is running", "status": "ok"}
 
 
 for module in (auth, addresses, locations, categories, products, inventory,

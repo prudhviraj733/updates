@@ -57,7 +57,7 @@ function Tabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: "BestKart" }} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: "SavingSmart" }} />
       <Tab.Screen name="Shop" component={ProductsScreen} />
       <Tab.Screen name="Cart" component={CartScreen} />
       <Tab.Screen name="Orders" component={OrdersScreen} options={{ title: "My Orders" }} />
@@ -68,7 +68,7 @@ function Tabs() {
 
 export default function RootNavigator() {
   const { user, booting } = useAuth();
-  if (booting) return <Loading label="Starting BestKart…" />;
+  if (booting) return <Loading label="Starting SavingSmart…" />;
 
   return (
     <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.forest }, headerTintColor: "#fff" }}>

@@ -36,7 +36,7 @@ export default function Auth({ mode = "login" }) {
       <div className="hidden flex-col justify-between bg-forest p-12 text-white md:flex">
         <Link to="/" className="flex items-center gap-2">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 font-heading text-xl font-extrabold">F</div>
-          <span className="font-heading text-2xl font-extrabold">Freshly</span>
+          <span className="font-heading text-2xl font-extrabold">SavingSmart</span>
         </Link>
         <div>
           <h2 className="font-heading text-4xl font-extrabold leading-tight">
@@ -55,7 +55,7 @@ export default function Auth({ mode = "login" }) {
             {mode === "login" ? "Sign in" : "Create your account"}
           </h1>
           <p className="mt-1 text-muted-foreground">
-            {isAdmin ? "Admin access only" : mode === "login" ? "Welcome back to Freshly" : "Start shopping in minutes"}
+            {isAdmin ? "Admin access only" : mode === "login" ? "Welcome back to SavingSmart" : "Start shopping in minutes"}
           </p>
 
           <form onSubmit={submit} className="mt-8 space-y-4">
@@ -90,7 +90,7 @@ export default function Auth({ mode = "login" }) {
           {!isAdmin && (
             <p className="mt-6 text-center text-sm text-muted-foreground">
               {mode === "login" ? (
-                <>New to Freshly? <Link to="/register" className="font-medium text-forest hover:underline">Create account</Link></>
+                <>New to SavingSmart? <Link to="/register" className="font-medium text-forest hover:underline">Create account</Link></>
               ) : (
                 <>Already have an account? <Link to="/login" className="font-medium text-forest hover:underline">Sign in</Link></>
               )}

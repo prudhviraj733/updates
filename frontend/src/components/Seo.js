@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
 
-const SITE_NAME = "BestKart";
+const SITE_NAME = "SavingSmart";
 const DEFAULT_DESC =
   "Order rice, dals, oils, spices, dry fruits and daily essentials online. Slot-based delivery or Get in 30 Minutes in select areas.";
 const DEFAULT_IMAGE = "/og-default.jpg";

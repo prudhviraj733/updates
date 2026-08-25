@@ -1,4 +1,4 @@
-# Freshly / BestKart — Production Deployment Package
+# SavingSmart / SavingSmart — Production Deployment Package
 
 This folder contains everything needed to self-host the **website + admin panel + API**
 on a **Hostinger VPS** (Ubuntu 24.04 LTS) or any Docker host. No application/business
@@ -36,15 +36,15 @@ Use the **"Save to GitHub"** feature in the Emergent chat to push this project t
 then on the VPS:
 ```bash
 sudo mkdir -p /opt && cd /opt
-git clone https://github.com/<your-username>/<your-repo>.git bestkart
-cd bestkart
+git clone https://github.com/<your-username>/<your-repo>.git savingsmart
+cd savingsmart
 ```
 > Alternative: `scp`/SFTP the project (exclude `.env`, `node_modules`, and build
 > artifacts). GitHub clone is preferred because updates are a simple `git pull`.
 
 ## 3. Configure environment (secrets live ONLY on the VPS)
 ```bash
-cd /opt/bestkart/deploy
+cd /opt/savingsmart/deploy
 cp .env.example .env
 nano .env               # fill in real values (see below)
 openssl rand -hex 32    # use output for JWT_SECRET
@@ -64,7 +64,7 @@ Fill in `.env` with:
 
 ## 4. Build & run
 ```bash
-cd /opt/bestkart/deploy
+cd /opt/savingsmart/deploy
 docker compose up -d --build
 docker compose ps
 docker compose logs -f backend      # watch startup (seeds admin + indexes)
@@ -93,7 +93,7 @@ After HTTPS is live, set the Razorpay webhook URL to
 
 ## 8. Updating later
 ```bash
-cd /opt/bestkart && git pull
+cd /opt/savingsmart && git pull
 cd deploy && docker compose up -d --build   # rebuild bakes any new URL
 ```
 

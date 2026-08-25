@@ -29,7 +29,7 @@ export default function Offers() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <Seo title="Offers & Coupons" description="Grab the latest grocery coupons and delivery offers at BestKart. Apply codes at checkout to save more." path="/offers" />
+      <Seo title="Offers & Coupons" description="Grab the latest grocery coupons and delivery offers at SavingSmart. Apply codes at checkout to save more." path="/offers" />
       <div className="flex items-center gap-3">
         <div className="grid h-11 w-11 place-items-center rounded-2xl bg-saffron text-white"><Ticket className="h-6 w-6" /></div>
         <div>

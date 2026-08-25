@@ -37,7 +37,7 @@ export default function ProductDetail() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       <Seo
         title={product.name}
-        description={(product.description || `Buy ${product.name} online at BestKart.`).slice(0, 160)}
+        description={(product.description || `Buy ${product.name} online at SavingSmart.`).slice(0, 160)}
         image={product.images?.[0]}
         path={`/product/${product.id}`}
         type="product"
@@ -47,7 +47,7 @@ export default function ProductDetail() {
           name: product.name,
           image: product.images || [],
           description: product.description || "",
-          brand: { "@type": "Brand", name: product.brand_name || "BestKart" },
+          brand: { "@type": "Brand", name: product.brand_name || "SavingSmart" },
           offers: {
             "@type": "Offer",
             priceCurrency: "INR",

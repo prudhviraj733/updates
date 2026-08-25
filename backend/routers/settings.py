@@ -7,9 +7,9 @@ from models import BusinessSettingsInput, now_iso
 router = APIRouter()
 
 DEFAULTS = {
-    "store_name": "Freshly Grocery",
+    "store_name": "SavingSmart Grocery",
     "support_phone": "+91 90000 00000",
-    "support_email": "support@freshly.example",
+    "support_email": "support@savingsmart.example",
     "currency": "INR",
     "cod_enabled": True,
     "online_payment_enabled": True,

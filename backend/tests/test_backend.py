@@ -1,4 +1,4 @@
-"""Backend regression tests for Freshly Grocery API."""
+"""Backend regression tests for SavingSmart Grocery API."""
 import os
 import time
 import uuid

@@ -42,7 +42,7 @@ export default function Home() {
         jsonLd={{
           "@context": "https://schema.org",
           "@type": "Organization",
-          name: "BestKart",
+          name: "SavingSmart",
           url: typeof window !== "undefined" ? window.location.origin : "https://bestkart.in",
           description: "Online grocery delivery for rice, dals, oils, spices, dry fruits and daily essentials.",
         }}

@@ -29,7 +29,7 @@ export default function AuthScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: colors.forest }}>
       <ScrollView contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
-        <Text style={styles.logo}>BestKart</Text>
+        <Text style={styles.logo}>SavingSmart</Text>
         <Text style={styles.tagline}>Fresh groceries, delivered your way</Text>
 
         <View style={styles.card}>

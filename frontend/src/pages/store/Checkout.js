@@ -198,7 +198,7 @@ export default function Checkout() {
           amount: rzp.amount,
           currency: rzp.currency,
           order_id: rzp.razorpay_order_id,
-          name: "Freshly Grocery",
+          name: "SavingSmart Grocery",
           description: order.order_number,
           handler: async (resp) => {
             try {

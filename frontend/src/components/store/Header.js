@@ -25,8 +25,8 @@ export function Header() {
     <header className="sticky top-0 z-40 border-b border-black/5 bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2" data-testid="logo-link">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-forest text-white font-heading font-extrabold">F</div>
-          <span className="hidden font-heading text-xl font-extrabold text-forest sm:block">Freshly</span>
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-forest text-white font-heading font-extrabold">S</div>
+          <span className="hidden font-heading text-xl font-extrabold text-forest sm:block">SavingSmart</span>
         </Link>
 
         <button

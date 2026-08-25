@@ -1,8 +1,8 @@
-# BestKart — Android App (Expo / React Native)
+# SavingSmart — Android App (Expo / React Native)
 
 A native Android customer app that reuses the **exact same production backend, APIs,
 authentication, catalog, cart, checkout, delivery rules and notifications** as the
-BestKart website. No separate backend or database.
+SavingSmart website. No separate backend or database.
 
 ## What's implemented
 - Email/password **register + login** with persistent auth (Bearer JWT stored in Expo SecureStore, auto token-refresh on 401).

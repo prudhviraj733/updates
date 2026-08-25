@@ -20,9 +20,9 @@ export default function Referral() {
     toast.success("Referral code copied");
   };
   const share = async () => {
-    const text = `Shop fresh groceries on Freshly! Use my code ${data.referral_code} and we both earn wallet cash.`;
+    const text = `Shop fresh groceries on SavingSmart! Use my code ${data.referral_code} and we both earn wallet cash.`;
     try {
-      if (navigator.share) { await navigator.share({ title: "Freshly", text }); }
+      if (navigator.share) { await navigator.share({ title: "SavingSmart", text }); }
       else { await navigator.clipboard?.writeText(text); toast.success("Invite message copied"); }
     } catch { /* user dismissed share / clipboard blocked */ }
   };

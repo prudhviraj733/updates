@@ -23,7 +23,7 @@ def client_platform(request: Request) -> str:
     if xrw and xrw != "xmlhttprequest":
         return "app"
     ua = (request.headers.get("user-agent") or "").lower()
-    if "freshlyapp" in ua or "median" in ua or "; wv)" in ua:
+    if "savingsmartapp" in ua or "median" in ua or "; wv)" in ua:
         return "app"
     return "web"
 

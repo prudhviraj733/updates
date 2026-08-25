@@ -51,7 +51,7 @@ export default function Wallet() {
       if (!ok) return toast.error("Could not load payment gateway");
       const rzp = new window.Razorpay({
         key: order.key_id, amount: order.amount, currency: order.currency, order_id: order.razorpay_order_id,
-        name: "Freshly Wallet", description: "Add money to wallet",
+        name: "SavingSmart Wallet", description: "Add money to wallet",
         handler: async (resp) => {
           try { await api.post("/me/wallet/topup/verify", resp); toast.success("Wallet credited!"); setAddOpen(false); load(); }
           catch { toast.error("Payment verification failed"); }

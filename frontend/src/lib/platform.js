@@ -1,6 +1,6 @@
 // Website vs Android-app detection. The Android WebView/TWA app should set
 // localStorage.platform = "app" (or open with ?platform=app), or expose
-// window.ReactNativeWebView / a "FreshlyApp" UA token. Everything else is web.
+// window.ReactNativeWebView / a "SavingSmartApp" UA token. Everything else is web.
 
 export function getVisitorId() {
   let id = localStorage.getItem("visitor_id");
@@ -19,7 +19,7 @@ export function detectPlatform() {
   const stored = (localStorage.getItem("platform") || "").toLowerCase();
   if (stored === "app" || stored === "web") return stored;
   const ua = (navigator.userAgent || "").toLowerCase();
-  if (window.ReactNativeWebView || /freshlyapp|median|; wv\)/.test(ua) ||
+  if (window.ReactNativeWebView || /savingsmartapp|median|; wv\)/.test(ua) ||
       (document.referrer || "").startsWith("android-app://")) {
     return "app";
   }

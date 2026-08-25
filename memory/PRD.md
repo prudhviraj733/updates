@@ -357,3 +357,11 @@ Platform Usage (Website vs App) — real data only:
 - Android app at /app/mobile (Expo SDK 51): SecureStore Bearer auth + auto-refresh, Home/PIN serviceability, Shop+search+filters, ProductDetail, Cart, Checkout (slot + Get-in-30 per PIN + coupon + COD + Razorpay via WebView->verify), Orders/OrderDetail, Account+addresses+wallet, Offers, Notifications, FCM device-token registration (getDevicePushTokenAsync -> PUT /me/device-tokens) + deep-link tap handling. app.json (package in.bestkart.app), eas.json (AAB profile), README with build/FCM/AAB steps.
 - CANNOT test in this env: Android emulator/AAB build/on-device push require user machine + google-services.json + physical device. All backend endpoints the app uses are curl-verified.
 - Web app verified still healthy + compiling after all changes.
+
+## 2026-08-25 — Rebrand to SavingSmart
+- Replaced all display text "Freshly"/"BestKart" -> "SavingSmart" across backend (server title, seed store_name, brand "SavingSmart Select", OTP SMS text, EMAIL_FROM_NAME default, settings defaults), web (Header/Footer/Auth/Referral/Wallet/Checkout/AdminLayout + SEO SITE_NAME/JSON-LD/meta + index.html title), and mobile (app display name, screens, README).
+- Logo badge letter F -> S in web Header + AdminLayout.
+- UA app token freshlyapp -> savingsmartapp (backend platform.py + frontend platform.js).
+- DB business_settings.store_name updated to "SavingSmart Grocery".
+- KEPT as keys/infra (unchanged): DB_NAME=freshly, S3_BUCKET=bestkart, storage prefix freshly-grocery, domain bestkart.in, android package in.bestkart.app, EAS slug bestkart-grocery, deep-link scheme bestkart, firebase project bestkart-d4cbf.
+- Verified: storefront shows SavingSmart, no Freshly/BestKart in rendered body; backend health "SavingSmart Grocery API"; frontend compiles.

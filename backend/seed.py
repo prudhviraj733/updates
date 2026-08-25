@@ -129,8 +129,8 @@ async def seed_data():
     })
 
     await db.business_settings.update_one({"key": "global"}, {"$set": {
-        "key": "global", "store_name": "Freshly", "support_phone": "+91 90000 00000",
-        "support_email": "support@freshly.example", "currency": "INR",
+        "key": "global", "store_name": "SavingSmart", "support_phone": "+91 90000 00000",
+        "support_email": "support@savingsmart.example", "currency": "INR",
         "cod_enabled": True, "online_payment_enabled": True,
     }}, upsert=True)
 
@@ -212,7 +212,7 @@ async def seed_combos_and_banners():
 async def seed_catalog_extensions():
     """Idempotent backfill: brands, subcategories, pincodes, product cost_price/brand/subcategory."""
     # ---- Brands ----
-    brand_defs = ["India Gate", "Fortune", "Tata", "Aashirvaad", "Freshly Select"]
+    brand_defs = ["India Gate", "Fortune", "Tata", "Aashirvaad", "SavingSmart Select"]
     brand_ids = {}
     for i, bname in enumerate(brand_defs):
         b = await db.brands.find_one({"name": bname}, {"_id": 0})
@@ -237,7 +237,7 @@ async def seed_catalog_extensions():
             return brand_ids["Aashirvaad"]
         if "tea" in n or "coffee" in n or "salt" in n or "sugar" in n:
             return brand_ids["Tata"]
-        return brand_ids["Freshly Select"]
+        return brand_ids["SavingSmart Select"]
 
     # ---- Subcategories ----
     sub_map = {

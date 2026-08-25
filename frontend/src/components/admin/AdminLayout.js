@@ -84,8 +84,8 @@ function SidebarContent({ pathname, onNavigate, navigate, logout, alerts }) {
   return (
     <>
       <div className="flex items-center gap-2 border-b border-white/10 px-5 py-4 text-white">
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-forest font-bold">F</div>
-        <span className="font-semibold">Freshly Admin</span>
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-forest font-bold">S</div>
+        <span className="font-semibold">SavingSmart Admin</span>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {NAV.map((item) => {
@@ -156,7 +156,7 @@ export function AdminLayout() {
               </div>
             </SheetContent>
           </Sheet>
-          <span className="font-semibold text-slate-800 lg:hidden">Freshly Admin</span>
+          <span className="font-semibold text-slate-800 lg:hidden">SavingSmart Admin</span>
           <div className="ml-auto text-sm text-slate-600">{user?.name} · <span className="text-forest">Admin</span></div>
         </header>
         <main className="p-4 lg:p-8"><Outlet /></main>

@@ -273,7 +273,7 @@ async def send_phone_otp(payload: PhoneOtpSendInput, user: dict = Depends(get_cu
                 "message": f"An OTP has been sent to {phone}."}
 
     try:
-        await send_sms(phone, f"Your Freshly verification code is {otp}. Valid for {OTP_TTL_MINUTES} minutes.")
+        await send_sms(phone, f"Your SavingSmart verification code is {otp}. Valid for {OTP_TTL_MINUTES} minutes.")
     except Exception:
         pass
 

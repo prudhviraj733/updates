@@ -1,8 +1,8 @@
-# BestKart — Project Handoff & Remaining-Work Checklist
+# SavingSmart — Project Handoff & Remaining-Work Checklist
 
 _Last updated: 2026-06 • For the incoming developer/freelancer_
 
-BestKart is a **PIN-code-based online grocery platform**: a customer storefront + admin
+SavingSmart is a **PIN-code-based online grocery platform**: a customer storefront + admin
 panel (web) and a customer **Android app**, sharing one FastAPI + MongoDB backend.
 
 ---
@@ -106,7 +106,7 @@ Frontend `REACT_APP_BACKEND_URL` — leave blank for same-origin `/api` on singl
 ### 🟡 P2 — Nice-to-have / polish
 - [ ] iOS build (Expo already supports it; add `google-services`→ APNs/Firebase iOS config).
 - [ ] Cart drawer (web) shows a placeholder delivery charge before PIN is set — show "calculated at checkout".
-- [ ] Brand consistency: some UI strings say "Freshly" vs "BestKart".
+- [ ] Brand consistency: some UI strings say "SavingSmart" vs "SavingSmart".
 - [ ] Migrate any legacy Emergent-stored images to R2 (compat fallback currently serves them).
 - [ ] Reorder button on past orders; product reviews/ratings; wishlist parity in app.
 - [ ] Automated test suite (pytest for backend already partially present under `/backend/tests`).
