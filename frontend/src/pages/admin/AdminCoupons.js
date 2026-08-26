@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const EMPTY = { code: "", coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 0, min_order_value: 0, max_discount: null, start_date: "", end_date: "", pin_codes: [], usage_limit: null, usage_limit_per_customer: null, is_active: true, location_ids: [], category_ids: [], category_id: null };
+const EMPTY = { code: "", coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 0, min_order_value: 0, max_discount: null, start_date: "", end_date: "", pin_codes: [], usage_limit: null, usage_limit_per_customer: null, is_active: true, location_ids: [], category_ids: [], category_id: null, first_order_only: false };
 const BULK_EMPTY = { prefix: "SAVE", count: 10, coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: null, usage_limit: 1, usage_limit_per_customer: 1 };
 
 export default function AdminCoupons() {
@@ -82,9 +82,11 @@ export default function AdminCoupons() {
             <div className="mt-2 flex gap-2">
               <Badge className={c.coupon_type === "delivery" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}>{c.coupon_type === "delivery" ? `Delivery · ${c.delivery_scope}` : "Product/Order"}</Badge>
               {c.category_id && <Badge className="bg-amber-100 text-amber-700" data-testid={`coupon-cat-badge-${c.id}`}>{catName(c.category_id) || "Category"} only</Badge>}
+              {c.first_order_only && <Badge className="bg-orange-100 text-orange-700" data-testid={`coupon-firstorder-badge-${c.id}`}>First order</Badge>}
             </div>
             <p className="mt-2 text-sm">{c.discount_type === "percentage" ? `${c.discount_value}% off` : `${inr(c.discount_value)} off`}{c.max_discount ? ` (max ${inr(c.max_discount)})` : ""}</p>
             <p className="text-xs text-slate-400">Min order {inr(c.min_order_value)}</p>
+            {(c.usage_limit || c.usage_limit_per_customer) && <p className="text-xs text-slate-400" data-testid={`coupon-limits-${c.id}`}>Limit {c.usage_limit ? `${c.usage_limit} total` : "∞"}{c.usage_limit_per_customer ? ` · ${c.usage_limit_per_customer}/customer` : ""}</p>}
             {c.is_active ? <Badge className="mt-2 bg-forest-light text-forest">Active</Badge> : <Badge variant="secondary" className="mt-2">Inactive</Badge>}
           </div>
         ))}
@@ -136,6 +138,11 @@ export default function AdminCoupons() {
               <div><Label>Valid until</Label><Input type="date" data-testid="coupon-end" value={(form.end_date || "").slice(0, 10)} onChange={(e) => setForm({ ...form, end_date: e.target.value })} /></div>
             </div>
             <div><Label>Target PIN codes (comma-separated, blank = all)</Label><Input data-testid="coupon-pins" value={(form.pin_codes || []).join(", ")} onChange={(e) => setForm({ ...form, pin_codes: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} placeholder="e.g. 500034, 500081" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Total usage limit (blank = unlimited)</Label><Input type="number" data-testid="coupon-usage-limit" value={form.usage_limit ?? ""} onChange={(e) => setForm({ ...form, usage_limit: e.target.value === "" ? null : e.target.value })} /></div>
+              <div><Label>Per-customer limit (blank = unlimited)</Label><Input type="number" data-testid="coupon-usage-limit-pc" value={form.usage_limit_per_customer ?? ""} onChange={(e) => setForm({ ...form, usage_limit_per_customer: e.target.value === "" ? null : e.target.value })} /></div>
+            </div>
+            <label className="flex items-center justify-between rounded-lg border p-2.5 text-sm"><span>Customer eligibility: <b>{form.first_order_only ? "First order only" : "All eligible customers"}</b></span><Switch checked={form.first_order_only} onCheckedChange={(v) => setForm({ ...form, first_order_only: v })} data-testid="coupon-first-order" /></label>
             <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />Active</label>
           </div>
           <DialogFooter><Button className="bg-forest hover:bg-forest-dark" onClick={save} data-testid="save-coupon-btn">Save</Button></DialogFooter>

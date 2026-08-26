@@ -7,7 +7,7 @@ from core.security import get_current_user, require_admin
 from core.platform import client_platform
 from models import OrderInput, OrderStatusUpdate, OrderTrackingInput, gen_id, now_iso
 from routers.delivery import get_settings, compute_slots
-from routers.coupons import _calc_discount, _calc_delivery_discount
+from routers.coupons import _calc_discount, _calc_delivery_discount, _assert_eligible, _category_name
 from routers.notifications import notify_order
 from routers.packages import price_and_validate_combo
 
@@ -225,20 +225,27 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
     free_delivery_applied = False
     if payload.coupon_code:
         coupon = await db.coupons.find_one({"code": payload.coupon_code.upper(), "is_active": True}, {"_id": 0})
-        applied = False
         if coupon:
+            # server-authoritative eligibility (validity, target, first-order, usage limits)
+            await _assert_eligible(coupon, user["id"])
+            if coupon.get("location_ids") and payload.location_id not in coupon["location_ids"]:
+                raise HTTPException(status_code=400, detail="Coupon not valid for this location")
             if coupon.get("category_id"):
-                cat_sub = round(sum(it["line_total"] for it in items
-                                    if it.get("category_id") == coupon["category_id"]), 2)
-                if cat_sub > 0 and cat_sub >= coupon.get("min_order_value", 0):
-                    coupon_discount = _calc_discount(coupon, cat_sub)
-                    coupon_code = coupon["code"]
-                    applied = True
-            elif subtotal >= coupon.get("min_order_value", 0):
+                cat_id = coupon["category_id"]
+                cat_sub = round(sum(it["line_total"] for it in items if it.get("category_id") == cat_id), 2)
+                min_req = coupon.get("min_order_value", 0)
+                if cat_sub <= 0 or cat_sub < min_req:
+                    cat_name = await _category_name(cat_id)
+                    raise HTTPException(status_code=400,
+                                        detail=f"Add ₹{max(round(min_req - cat_sub), 0)} more of {cat_name} products to use this coupon")
+                coupon_discount = _calc_discount(coupon, cat_sub)
+                coupon_code = coupon["code"]
+            else:
+                if subtotal < coupon.get("min_order_value", 0):
+                    raise HTTPException(status_code=400, detail=f"Minimum order value ₹{coupon['min_order_value']} required")
                 coupon_discount = _calc_discount(coupon, subtotal)
                 coupon_code = coupon["code"]
-                applied = True
-        if not applied:
+        else:
             from routers.personalization import resolve_personalized
             try:
                 pc = await resolve_personalized(payload.coupon_code, user["id"], payload.location_id, subtotal)
@@ -263,6 +270,7 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         if dcoupon:
             if dcoupon.get("location_ids") and payload.location_id not in dcoupon["location_ids"]:
                 raise HTTPException(status_code=400, detail="Delivery coupon not valid for this location")
+            await _assert_eligible(dcoupon, user["id"])
             delivery_discount = _calc_delivery_discount(dcoupon, delivery_charge, express_charge)
             delivery_coupon_code = dcoupon["code"]
 

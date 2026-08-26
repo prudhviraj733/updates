@@ -1,0 +1,42 @@
+{
+  "summary": "Tested the coupon visibility/eligibility split, first-order-only logic, usage limits, category-subtotal math, server-side tamper-proofing (13 new pytest cases, all pass) plus full frontend flows: checkout Available-Coupons modal (open/apply/remove/Add-More/reason states, first-order hiding) and admin coupon form (category + first-order + usage limits, badges, delete). One HIGH-priority frontend race condition found: /coupons/available is fetched with subtotal=0 before the cart loads and the stale response wins, so eligible general (cart-wide) coupons (WELCOME50 min 299, SAVE10 min 499) are wrongly shown as 'Not eligible yet - Add Rs299 more to use' with NO Apply button on a Rs854 cart, making them unusable from the modal.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/coupons/validate", "issue": "For non-category product coupons the discount is computed from the client-supplied `subtotal` (tampered subtotal=1000000 on SAVE10 returned discount 150 = max_discount cap). Order creation recomputes from the cart so no real money loss, but validate should derive subtotal server-side from the cart (like _cart_category_subtotal) so the displayed discount cannot be inflated."},
+      {"endpoint": "GET /api/coupons/available", "issue": "`subtotal` is a query param taken from the client; general-coupon eligibility/shortfall depends entirely on it (root cause amplifier of the frontend race). Derive from cart server-side."},
+      {"endpoint": "GET /api/coupons/available", "issue": "Performance: per-coupon awaits (_usage_counts = 2 count_documents per coupon, _cart_category_subtotal re-reads cart+products per coupon). With 15 coupons this is already ~40+ DB round trips per checkout render (x4 renders observed)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Checkout / AdminCoupons", "issue": "Admin coupon cards do not display the configured usage limit / per-customer limit (values persist correctly but are invisible after save)", "selector": "[data-testid^='coupon-card-']", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Checkout -> Available Coupons modal (general coupons)", "issue": "HIGH: coupons/available is called 4x on checkout mount, 3x with subtotal=0 (before cart.subtotal resolves) and once with the real 854; the subtotal=0 response is the one rendered. Result: eligible cart-wide coupons WELCOME50 (min 299) and SAVE10 (min 499) render as not-eligible with reason 'Add Rs299/Rs499 more to use' and only a disabled 'Not eligible yet' button on a Rs854 cart -> customer cannot apply a valid coupon from the modal. IT21GENMIN shortfall also shown as Rs99999 instead of Rs99145. Fix: skip the fetch until cart.subtotal > 0 and/or ignore stale responses (AbortController / request sequence guard), or better, drop the subtotal param and compute it server-side.", "affected_selectors": ["[data-testid='modal-reason-WELCOME50']", "[data-testid='modal-apply-WELCOME50']", "[data-testid='coupons-modal']"]},
+      {"flow": "Checkout modal after apply/remove", "issue": "MEDIUM: availCoupons is only refetched when cart.subtotal changes, so after applying/removing a coupon the modal's eligibility/shortfall data is stale (e.g. stacking rules or newly-consumed per-customer limits are not reflected until reload).", "affected_selectors": ["[data-testid='open-coupons-btn']"]},
+      {"flow": "Spec compliance", "issue": "LOW/spec: requirement (1) asked for ONLY an 'Available Coupons' button in cart/checkout, but the inline manual 'Coupon code' input + Apply button is still rendered above it. Confirm this is intentional.", "affected_selectors": ["[data-testid='coupon-input']", "[data-testid='apply-coupon']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_coupon_iter21.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "FIX (HIGH): Checkout.js coupons/available race - gate the fetch on cart.subtotal > 0 and discard stale responses; eligible general coupons currently show as not-eligible and cannot be applied from the modal.",
+    "Refetch availCoupons after apply/remove so modal states stay in sync.",
+    "Compute subtotal server-side (from cart) in /api/coupons/validate and /api/coupons/available instead of trusting the client value.",
+    "Optional: show usage limits on admin coupon cards; batch the per-coupon DB queries in /coupons/available."
+  ],
+  "critical_code_review_comments": [
+    "Checkout.js line ~96: useEffect depends on [location, today, cart.subtotal] and fires multiple overlapping requests with no cancellation; last-resolved wins -> stale subtotal=0 data rendered (verified via network capture).",
+    "coupons.py validate_coupon: non-category branch uses payload.subtotal (client) while the category branch correctly derives from the cart - inconsistent trust model.",
+    "coupons.py available_coupons: N+1 DB queries per coupon (usage counts + cart category subtotal); consider aggregating usage counts once and caching the cart lookup."
+  ],
+  "updated_files": ["/app/backend/tests/test_coupon_iter21.py"],
+  "success_rate": {"backend": "100% (13/13 pytest cases)", "frontend": "~85% (modal apply/remove/add-more/first-order-hiding/admin form all pass; general-coupon eligibility broken by stale-fetch race)"},
+  "seed_data_creation": "Temporary coupons (IT21*, IT21RICEOK/RICEADD/GENMIN/FIRST, IT21UIADM) and a throwaway registered customer it21_*@test.com with one COD order - ALL deleted/cleaned up (coupons deleted via admin API/UI, user+orders+addresses removed from Mongo, test COD order cancelled, customer@test.com cart cleared).",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin prudhvirajm847@gmail.com / Admin@12345; customer customer@test.com / Test@12345 (has prior orders)",
+  "context_for_next_testing_agent": "Working test data: location 562020f5-a8e0-4c37-8034-23af80e8c0c1 (Vijayawada), pincode 520003, Rice category f0e27be7-fbf0-4d4f-ba4a-893b203a81eb (India Gate Basmati Rice Rs699 id 4a46addc-6abc-4d6b-acb4-808512cedb4b), Dals Toor Dal Rs155 id f661723a-3fee-4fbd-ad91-60ae90abdbcc. customer@test.com has addresses for 520003. Re-run /app/backend/tests/test_coupon_iter21.py (13 cases) for regression. For the frontend, verify the coupons/available race fix by capturing requests (page.on('request')) and confirming WELCOME50 shows an Apply button on a Rs854 cart.",
+  "rca_of_the_issue": "Checkout.js fires GET /coupons/available inside a useEffect keyed on cart.subtotal. On mount cart.subtotal is 0, and React re-renders trigger 3 duplicate requests with subtotal=0 before the cart API resolves; the final request uses the real subtotal (854) but the setAvailCoupons of a subtotal=0 response resolves last and overwrites the correct list. Because eligibility/reason/state for cart-wide coupons is computed server-side from that query param, all general coupons above Rs0 minimum render as state='almost' with an inaccurate shortfall and no Apply button. Reproduction: login customer@test.com, PIN 520003, cart = Rice 699 + Toor Dal 155, open /checkout -> View available coupons -> WELCOME50 shows 'Add Rs299 more to use' / 'Not eligible yet'."
+}

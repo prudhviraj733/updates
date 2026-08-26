@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="13" time="8.057" timestamp="2026-08-26T14:50:40.912562+00:00" hostname="agent-env-3a6f2eff-d9db-44c9-8daa-fbea18feedb1"><testcase classname="tests.test_coupon_iter21.TestCategoryAndTamper" name="test_category_discount_uses_category_subtotal_not_tampered_subtotal" time="2.194" /><testcase classname="tests.test_coupon_iter21.TestVisibilityVsEligibility" name="test_general_min_order_coupon_visible_but_not_eligible" time="1.967" /><testcase classname="tests.test_coupon_iter21.TestVisibilityVsEligibility" name="test_first_order_coupon_hidden_for_existing_customer" time="0.327" /><testcase classname="tests.test_coupon_iter21.TestVisibilityVsEligibility" name="test_first_order_coupon_rejected_for_existing_customer" time="0.204" /><testcase classname="tests.test_coupon_iter21.TestCategoryAndTamper" name="test_category_coupon_below_min_rejected_with_shortfall_message" time="1.429" /><testcase classname="tests.test_coupon_iter21.TestVisibilityVsEligibility" name="test_expired_coupon_hidden_and_rejected" time="0.301" /><testcase classname="tests.test_coupon_iter21.TestVisibilityVsEligibility" name="test_available_requires_auth" time="0.255" /><testcase classname="tests.test_coupon_iter21.TestAdminCouponFields" name="test_create_with_new_fields_persists" time="0.150" /><testcase classname="tests.test_coupon_iter21.TestUsageLimits" name="test_global_and_per_customer_limits_hidden_and_rejected" time="1.512" /><testcase classname="tests.test_coupon_iter21.TestCategoryAndTamper" name="test_general_coupon_regression" time="0.620" /><testcase classname="tests.test_coupon_iter21.TestNewCustomerE2E" name="test_new_customer_sees_and_applies_first_order_coupon" time="0.712"><failure message="assert 0.0 == 40">self = &lt;test_coupon_iter21.TestNewCustomerE2E object at 0xfa899bca7950&gt;
+admin = &lt;requests.sessions.Session object at 0xfa899bca7f90&gt;
+new_customer = {'session': &lt;requests.sessions.Session object at 0xfa899bccb710&gt;, 'email': 'it21_2220b5c8@test.com'}
+created_coupon_ids = ['17c5510f-76dc-4b20-bc72-e21fa49e44e1', 'a377f4e4-33ed-4c20-aed2-774035492f6c', '34939cc1-5a7e-4a58-9785-d9989aa1746a', '86641cf6-4853-410b-b38d-6a50e08822a5']
+store = {'location_id': '562020f5-a8e0-4c37-8034-23af80e8c0c1', 'pincode': '520003', 'products': [{'id': '4a46addc-6abc-4d6b-a...ategory_id': '6a6f2b70-dd06-46da-b49f-e3c1ced711f1', ...}, ...], 'cat_id': 'f0e27be7-fbf0-4d4f-ba4a-893b203a81eb', ...}
+
+    def test_new_customer_sees_and_applies_first_order_coupon(self, admin, new_customer,
+                                                              created_coupon_ids, store):
+        s = new_customer["session"]
+        c = mk_coupon(admin, created_coupon_ids, first_order_only=True, discount_type="fixed",
+                      discount_value=40, min_order_value=0)
+        codes = [x["code"] for x in s.get(f"{BASE}/coupons/available", params={
+            "location_id": store["location_id"], "subtotal": 500, "pincode": store["pincode"]}).json()]
+        assert c["code"] in codes, "brand-new customer must see first-order-only coupon"
+        r = s.post(f"{BASE}/coupons/validate", json={"code": c["code"],
+                                                     "location_id": store["location_id"], "subtotal": 500})
+        assert r.status_code == 200, r.text
+&gt;       assert r.json()["discount"] == 40
+E       assert 0.0 == 40
+
+tests/test_coupon_iter21.py:251: AssertionError</failure></testcase><testcase classname="tests.test_coupon_iter21.TestNewCustomerE2E" name="test_place_cod_order_with_category_coupon_matches_server_calc" time="1.599" /><testcase classname="tests.test_coupon_iter21.TestNewCustomerE2E" name="test_first_order_coupon_rejected_after_order_exists" time="0.980" /></testsuite></testsuites>

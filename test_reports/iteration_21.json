@@ -1,0 +1,38 @@
+{
+  "summary": "Re-test of the coupon system after moving cart-subtotal computation server-side. Backend: 22/22 pytest cases pass (8 new in test_coupon_iter22.py + 14 regression from iter21/edge-case/category/tamper suites). Frontend: verified the PRIMARY iteration_20 HIGH bug is FIXED - on a Rs854 cart the checkout 'Available Coupons' modal now shows eligible general coupons (WELCOME50 min 299, SAVE10 min 499, IT22GEN min 299) with ACTIVE Apply buttons even though 2 of the 5 /coupons/available requests still carry the stale subtotal=0 (server ignores the param). Applying IT22GEN (10%) reduced the total 914 -> 828.6 (=10% of 854), modal then showed 'Applied · Remove', removing restored 914. Category coupon showed reason 'Add Rs4301 more of Rice products to use' + working 'Add More' that navigates to /products?category=<rice-id>. End-to-end COD order with stacked product+delivery coupon placed successfully (subtotal 854, coupon -85.4, delivery 60, delivery coupon -60, total paid 768.6). Admin /admin/coupons form (category select, first-order switch, total + per-customer limits) saves and the card now renders category badge, First-order badge and 'Limit 7 total · 2/customer' (previous LOW issue fixed); delete works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/coupons/validate", "issue": "Empty-cart edge case: validating a general (non-category) coupon with an EMPTY cart returns 200 with discount 0.0 and message 'Coupon applied' instead of a 400 like the category branch ('Add <cat> items to use this coupon'). Cosmetic/UX only (order creation recomputes), but the customer sees a success toast '-Rs0'."},
+      {"endpoint": "GET /api/coupons/available", "issue": "Still called 5x per checkout render (2x before cart resolves). Now harmless because subtotal is server-derived, but each call re-reads the cart+products; consider debouncing/memoising the effect."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Checkout -> coupons/available", "issue": "LOW: Checkout.js still sends the now-ignored `subtotal` query param and still fires the request before the cart resolves (subtotal=0). Behaviour is correct because the backend ignores it; recommend dropping the param to avoid confusion.", "affected_selectors": ["[data-testid='open-coupons-btn']"]}
+    ],
+    "design_issues": [
+      {"screen": "Admin > Coupons > Add Coupon dialog", "issues": ["'Valid from' / 'Valid until' use native <input type=date> (browser mm/dd/yyyy picker) instead of the shadcn Calendar/Popover used elsewhere"]},
+      {"screen": "Checkout", "issues": ["Default-selected address can be for a different PIN (Hyderabad 500034) than the active delivery PIN (520003), so delivery charge/express options change after the user manually picks the matching address - consider auto-selecting an address matching the active pincode"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_coupon_iter22.py", "/app/backend/tests/test_coupon_iter21.py", "/app/test_reports/pytest/iter22_results.xml"],
+  "action_items": [
+    "Optional: return 400 ('Your cart is empty' / 'Add items to use this coupon') from /coupons/validate for general coupons when the server-derived cart subtotal is 0, instead of 200 with discount 0.",
+    "Optional cleanup: remove the unused `subtotal` query param from Checkout.js coupon fetches and debounce the effect (currently 5 calls per render cycle).",
+    "Optional: replace the native date inputs in AdminCoupons with the shadcn calendar picker; auto-select checkout address matching the active pincode."
+  ],
+  "critical_code_review_comments": [
+    "coupons.py now derives cart_total/cart_by_cat once via _cart_breakdown and uses _bulk_usage_counts - the N+1 concern from iteration_20 is resolved for usage counts; _cart_category_subtotal is still used in validate_coupon (a second cart read) and could reuse _cart_breakdown.",
+    "Tests that cancel orders must use PUT /api/admin/orders/{id}/status (releases reserved inventory); the previous suite cancelled via direct Mongo writes which drained available_quantity for pincode 520003 to 0 and broke test setup. I restored that inventory (available 25 / reserved 0) and fixed both suites to cancel via the admin API."
+  ],
+  "updated_files": ["/app/backend/tests/test_coupon_iter22.py", "/app/backend/tests/test_coupon_iter21.py"],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "100% of tested flows (modal eligibility/apply/remove/add-more, stacked coupon order e2e, admin coupon CRUD)"},
+  "seed_data_creation": "Temporary coupons IT22GEN, IT22CATBIG, IT22UIADM, TMPEMPTY* and IT22*/IT21* pytest coupons - all deleted (verified remaining coupon list contains only pre-existing codes). UI COD order FG260800050 cancelled via admin API (inventory released). customer@test.com cart cleared. Restored inventory for pincode 520003 that earlier iterations had drained.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin prudhvirajm847@gmail.com / Admin@12345; customer customer@test.com / Test@12345",
+  "context_for_next_testing_agent": "Coupon feature is green. Regression suites: /app/backend/tests/test_coupon_iter22.py (server-derived subtotal / tamper-proofing / order e2e) and test_coupon_iter21.py (visibility vs eligibility, first-order, usage limits). Run with -n0 (xdist parallelism breaks the shared customer cart). Working data: location 562020f5-a8e0-4c37-8034-23af80e8c0c1, pincode 520003, Rice cat f0e27be7-fbf0-4d4f-ba4a-893b203a81eb (India Gate Rice Rs699 id 4a46addc-6abc-4d6b-acb4-808512cedb4b), Toor Dal Rs155 id f661723a-3fee-4fbd-ad91-60ae90abdbcc. Frontend: login, then set localStorage location_id+pincode and goto /checkout. Always cancel test orders via PUT /api/admin/orders/{id}/status to release inventory.",
+  "rca_of_the_issue": "iteration_20 HIGH bug (stale subtotal=0 race) is resolved at the source: /api/coupons/available and /api/coupons/validate now compute the cart total and per-category totals from the DB cart (_cart_breakdown/_cart_subtotal) and ignore the client `subtotal`. Verified by request capture: the last-resolved subtotal=0 response no longer degrades eligibility, and tampered subtotal=999999 yields a discount computed from the real cart (10% of 854 = 85.4)."
+}

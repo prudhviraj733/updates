@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { MapPin, Plus, Zap, Clock, Wallet, CreditCard, Check } from "lucide-react";
+import { MapPin, Plus, Zap, Clock, Wallet, CreditCard, Check, Tag } from "lucide-react";
 import api, { inr } from "@/lib/api";
 import { getCurrentPosition, reverseGeocode, geoErrorMessage } from "@/lib/geo";
 import { MapPicker } from "@/components/store/MapPicker";
@@ -10,6 +10,7 @@ import { useStore } from "@/context/StoreContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const EMPTY_ADDR = { label: "Home", full_name: "", phone: "", line1: "", line2: "", city: "", area: "", pincode: "", latitude: null, longitude: null, is_default: false };
@@ -47,6 +48,7 @@ export default function Checkout() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [useWallet, setUseWallet] = useState(false);
   const [availCoupons, setAvailCoupons] = useState([]);
+  const [couponsOpen, setCouponsOpen] = useState(false);
   const [deliveryInfo, setDeliveryInfo] = useState(null);
   const [locating, setLocating] = useState(false);
 
@@ -91,8 +93,13 @@ export default function Checkout() {
     api.get("/payments/config").then(({ data }) => setPayConfig(data));
     api.get("/settings").then(({ data }) => setSettings(data));
     api.get("/me/wallet").then(({ data }) => setWalletBalance(data.balance || 0)).catch(() => {});
-    api.get(`/coupons/available?location_id=${location.id}&subtotal=${cart.subtotal}`).then(({ data }) => setAvailCoupons(data)).catch(() => setAvailCoupons([]));
+    api.get(`/coupons/available?location_id=${location.id}&pincode=${pincode || ""}`).then(({ data }) => setAvailCoupons(data)).catch(() => setAvailCoupons([]));
   }, [location, today, cart.subtotal]);
+  // eslint-disable-next-line
+  const refreshCoupons = () => {
+    if (!location) return;
+    api.get(`/coupons/available?location_id=${location.id}&pincode=${pincode || ""}`).then(({ data }) => setAvailCoupons(data)).catch(() => {});
+  };
 
   const selectedAddress = addresses.find((a) => a.id === addressId);
   const activePincode = selectedAddress?.pincode || pincode;
@@ -142,11 +149,12 @@ export default function Checkout() {
       else { setProductCoupon(data); }
       setCoupon("");
       toast.success(`Coupon applied: -${inr(data.discount)}`);
+      refreshCoupons();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Invalid coupon");
     }
   };
-  const removeCoupon = (type) => { if (type === "delivery") setDeliveryCoupon(null); else setProductCoupon(null); };
+  const removeCoupon = (type) => { if (type === "delivery") setDeliveryCoupon(null); else setProductCoupon(null); refreshCoupons(); };
 
   const applyByCode = async (code) => {
     const appliedCodes = [productCoupon?.code, deliveryCoupon?.code].filter(Boolean);
@@ -157,6 +165,7 @@ export default function Checkout() {
       });
       if (data.coupon_type === "delivery") setDeliveryCoupon(data); else setProductCoupon(data);
       toast.success(`Coupon applied: -${inr(data.discount)}`);
+      refreshCoupons();
     } catch (e) { toast.error(e.response?.data?.detail || "Invalid coupon"); }
   };
 
@@ -392,21 +401,9 @@ export default function Checkout() {
             </div>
             <p className="mt-1 text-xs text-muted-foreground">You can stack 1 product coupon + 1 delivery coupon.</p>
             {availCoupons.length > 0 && (
-              <div className="mt-3" data-testid="available-coupons">
-                <p className="text-xs font-semibold text-muted-foreground">Available coupons</p>
-                <div className="mt-1 space-y-1.5">
-                  {availCoupons.map((c) => (
-                    <div key={c.code} className="flex items-center justify-between rounded-xl border border-dashed border-forest/40 px-3 py-2 text-sm" data-testid={`avail-coupon-${c.code}`}>
-                      <div>
-                        <span className="font-mono font-semibold text-forest">{c.code}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">{c.discount_type === "percentage" ? `${c.discount_value}% off` : `${inr(c.discount_value)} off`}{c.coupon_type === "delivery" ? ` · delivery (${c.delivery_scope})` : ""}{c.category_name ? ` · ${c.category_name} items only` : ""}</span>
-                        {!c.eligible && c.reason && <p className="text-xs text-amber-600">{c.reason}</p>}
-                      </div>
-                      <Button size="sm" variant="outline" className="h-7 rounded-full text-xs" disabled={!c.eligible} onClick={() => applyByCode(c.code)} data-testid={`apply-avail-${c.code}`}>Apply</Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Button variant="outline" className="mt-3 w-full rounded-full border-dashed border-forest/50 text-forest hover:bg-forest-light" onClick={() => setCouponsOpen(true)} data-testid="open-coupons-btn">
+                <Tag className="mr-2 h-4 w-4" />View available coupons ({availCoupons.length})
+              </Button>
             )}
             {walletBalance > 0 && (
               <label className="mt-3 flex cursor-pointer items-center justify-between rounded-xl border border-forest/30 bg-forest-light/40 px-3 py-2.5" data-testid="use-wallet-toggle">
@@ -428,6 +425,45 @@ export default function Checkout() {
                 </div>
               )}
             </div>
+
+            <Dialog open={couponsOpen} onOpenChange={setCouponsOpen}>
+              <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto" data-testid="coupons-modal">
+                <DialogHeader><DialogTitle>Available Coupons</DialogTitle></DialogHeader>
+                <div className="space-y-2">
+                  {availCoupons.length === 0 && <p className="text-sm text-muted-foreground">No coupons available right now.</p>}
+                  {availCoupons.map((c) => {
+                    const applied = c.code === productCoupon?.code || c.code === deliveryCoupon?.code;
+                    return (
+                      <div key={c.code} className={`rounded-xl border p-3 ${c.eligible ? "border-forest/40" : "border-dashed border-slate-300"}`} data-testid={`modal-coupon-${c.code}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-forest">{c.code}</span>
+                          {c.first_order_only && <Badge className="bg-saffron/15 text-[10px] text-saffron">First order</Badge>}
+                        </div>
+                        <p className="mt-0.5 text-sm">
+                          {c.discount_type === "percentage" ? `${c.discount_value}% off` : `${inr(c.discount_value)} off`}
+                          {c.max_discount ? ` (up to ${inr(c.max_discount)})` : ""}
+                          {c.category_name ? ` on ${c.category_name}` : ""}
+                          {c.coupon_type === "delivery" ? ` · delivery (${c.delivery_scope})` : ""}
+                          {c.min_order_value ? ` · min ${inr(c.min_order_value)}${c.category_name ? ` of ${c.category_name}` : ""}` : ""}
+                        </p>
+                        {!c.eligible && c.reason && <p className="mt-1 text-xs text-amber-600" data-testid={`modal-reason-${c.code}`}>{c.reason}</p>}
+                        <div className="mt-2 flex justify-end">
+                          {applied ? (
+                            <Button size="sm" variant="ghost" className="h-8 rounded-full text-xs text-destructive" onClick={() => removeCoupon(c.coupon_type === "delivery" ? "delivery" : "product")} data-testid={`modal-remove-${c.code}`}>Applied · Remove</Button>
+                          ) : c.eligible ? (
+                            <Button size="sm" className="h-8 rounded-full bg-forest text-xs hover:bg-forest-dark" onClick={() => { applyByCode(c.code); setCouponsOpen(false); }} data-testid={`modal-apply-${c.code}`}>Apply</Button>
+                          ) : c.category_id && c.shortfall > 0 ? (
+                            <Button size="sm" variant="outline" className="h-8 rounded-full text-xs" onClick={() => navigate(`/products?category=${c.category_id}`)} data-testid={`modal-addmore-${c.code}`}>Add More</Button>
+                          ) : (
+                            <Button size="sm" variant="outline" className="h-8 rounded-full text-xs" disabled>Not eligible yet</Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <div className="mt-4 space-y-1 border-t pt-4 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{inr(cart.subtotal)}</span></div>

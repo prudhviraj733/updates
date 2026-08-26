@@ -75,18 +75,105 @@ async def _cart_category_subtotal(user_id: str, location_id: str, category_id: s
     return round(total, 2)
 
 
-@router.post("/coupons/validate")
-async def validate_coupon(payload: CouponValidateInput, user: dict = Depends(get_current_user)):
-    coupon = await _find_coupon(payload.code)
-    if not coupon:
-        raise HTTPException(status_code=404, detail="Invalid coupon code")
+async def _cart_breakdown(user_id: str, location_id: str):
+    """Single cart read -> (total_subtotal, {category_id: subtotal}). Server-authoritative; never trusts client."""
+    cart = await db.carts.find_one({"user_id": user_id, "location_id": location_id})
+    total = 0.0
+    by_cat: dict = {}
+    if not cart or not cart.get("items"):
+        return 0.0, by_cat
+    for ci in cart["items"]:
+        if ci.get("type") == "combo":
+            pkg = await db.packages.find_one({"id": ci["combo_id"], "is_active": True}, {"_id": 0})
+            if not pkg:
+                continue
+            from routers.packages import price_and_validate_combo
+            try:
+                priced = await price_and_validate_combo(pkg, ci.get("selections", {}), location_id, validate_stock=False)
+            except Exception:
+                continue
+            total += priced["effective_price"]
+            for li in priced["items"]:
+                cid = li.get("category_id")
+                by_cat[cid] = by_cat.get(cid, 0.0) + li["unit_price"] * li["quantity"]
+        else:
+            product = await db.products.find_one({"id": ci["product_id"]}, {"_id": 0})
+            if product and product.get("is_active"):
+                amt = product["selling_price"] * ci["quantity"]
+                total += amt
+                cid = product.get("category_id")
+                by_cat[cid] = by_cat.get(cid, 0.0) + amt
+    return round(total, 2), {k: round(v, 2) for k, v in by_cat.items()}
+
+
+async def _cart_subtotal(user_id: str, location_id: str) -> float:
+    total, _ = await _cart_breakdown(user_id, location_id)
+    return total
+
+
+async def _bulk_usage_counts(codes, user_id: str):
+    """One pass over orders -> {CODE: (total_used, this_customer_used)} for the given coupon codes."""
+    codes = [c.upper() for c in codes]
+    res = {c: [0, 0] for c in codes}
+    if not codes:
+        return {}
+    q = {"status": {"$ne": "cancelled"},
+         "$or": [{"coupon_code": {"$in": codes}}, {"delivery_coupon_code": {"$in": codes}}]}
+    async for o in db.orders.find(q, {"coupon_code": 1, "delivery_coupon_code": 1, "user_id": 1, "_id": 0}):
+        seen = set()
+        for field in ("coupon_code", "delivery_coupon_code"):
+            code = (o.get(field) or "").upper()
+            if code in res and code not in seen:
+                seen.add(code)
+                res[code][0] += 1
+                if o.get("user_id") == user_id:
+                    res[code][1] += 1
+    return {k: (v[0], v[1]) for k, v in res.items()}
+
+
+async def _is_first_time(user_id: str) -> bool:
+    """First-time customer = no non-cancelled orders (server/DB-derived, never trusted from client)."""
+    n = await db.orders.count_documents({"user_id": user_id, "status": {"$ne": "cancelled"}})
+    return n == 0
+
+
+async def _usage_counts(code: str, user_id: str):
+    """(total redemptions, this-customer redemptions) for a public coupon, from order history."""
+    code = code.upper()
+    q = {"$or": [{"coupon_code": code}, {"delivery_coupon_code": code}], "status": {"$ne": "cancelled"}}
+    total = await db.orders.count_documents(q)
+    mine = await db.orders.count_documents({**q, "user_id": user_id})
+    return total, mine
+
+
+async def _assert_eligible(coupon: dict, user_id: str):
+    """Server-authoritative customer eligibility (validity, target, first-order, usage limits). Raises 400."""
     now = datetime.now().isoformat()
     if coupon.get("start_date") and coupon["start_date"] > now:
         raise HTTPException(status_code=400, detail="Coupon not active yet")
     if coupon.get("end_date") and coupon["end_date"] < now:
         raise HTTPException(status_code=400, detail="Coupon expired")
+    if coupon.get("target_user_ids") and user_id not in coupon["target_user_ids"]:
+        raise HTTPException(status_code=400, detail="This coupon is not valid for your account")
+    if coupon.get("first_order_only") and not await _is_first_time(user_id):
+        raise HTTPException(status_code=400, detail="This coupon is only valid on your first order")
+    ul, ulpc = coupon.get("usage_limit"), coupon.get("usage_limit_per_customer")
+    if ul or ulpc:
+        total, mine = await _usage_counts(coupon["code"], user_id)
+        if ul and total >= ul:
+            raise HTTPException(status_code=400, detail="This coupon has reached its usage limit")
+        if ulpc and mine >= ulpc:
+            raise HTTPException(status_code=400, detail="You have already used this coupon")
+
+
+@router.post("/coupons/validate")
+async def validate_coupon(payload: CouponValidateInput, user: dict = Depends(get_current_user)):
+    coupon = await _find_coupon(payload.code)
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Invalid coupon code")
     if coupon.get("location_ids") and payload.location_id not in coupon["location_ids"]:
         raise HTTPException(status_code=400, detail="Coupon not valid for this location")
+    await _assert_eligible(coupon, user["id"])
 
     ctype = coupon.get("coupon_type", "product")
 
@@ -126,9 +213,11 @@ async def validate_coupon(payload: CouponValidateInput, user: dict = Depends(get
         return {"code": coupon["code"], "coupon_type": "product", "category_id": cat_id,
                 "category_name": cat_name, "category_subtotal": cat_sub, "discount": discount,
                 "message": f"Coupon applied on {cat_name} items"}
-    if payload.subtotal < coupon.get("min_order_value", 0):
-        raise HTTPException(status_code=400, detail=f"Minimum order value ₹{coupon['min_order_value']} required")
-    discount = _calc_discount(coupon, payload.subtotal)
+    cart_sub = await _cart_subtotal(user["id"], payload.location_id)
+    if cart_sub < coupon.get("min_order_value", 0):
+        raise HTTPException(status_code=400,
+                            detail=f"Add ₹{round(coupon.get('min_order_value', 0) - cart_sub)} more to use this coupon")
+    discount = _calc_discount(coupon, cart_sub)
     return {"code": coupon["code"], "coupon_type": "product", "discount": discount, "message": "Coupon applied"}
 
 
@@ -153,47 +242,66 @@ async def list_public_coupons(location_id: str = None):
 @router.get("/coupons/available")
 async def available_coupons(location_id: str, subtotal: float = 0, pincode: str = "",
                             user: dict = Depends(get_current_user)):
-    """Coupons actually eligible for THIS customer, PIN, cart & date (product + delivery)."""
+    """VISIBLE coupons for THIS customer, each tagged with cart APPLICATION eligibility.
+    Visibility (hidden entirely) vs application eligibility (shown but blocked) are separate concepts.
+    Cart subtotals are derived server-side (the client `subtotal` param is ignored for correctness/security)."""
     now = datetime.now().isoformat()
     pincode = (pincode or "").strip()
+    first_time = await _is_first_time(user["id"])
+    cart_total, cart_by_cat = await _cart_breakdown(user["id"], location_id)
     coupons = await db.coupons.find({"is_active": True}, {"_id": 0}).to_list(500)
+    limited_codes = [c["code"] for c in coupons if c.get("usage_limit") or c.get("usage_limit_per_customer")]
+    usage = await _bulk_usage_counts(limited_codes, user["id"])
     out = []
     for c in coupons:
+        # ---- VISIBILITY eligibility: hide entirely if any of these fail ----
         if c.get("start_date") and c["start_date"] > now:
             continue
         if c.get("end_date") and (c["end_date"] + "T23:59:59") < now:
             continue
         if c.get("location_ids") and location_id not in c["location_ids"]:
             continue
-        if c.get("pin_codes"):
-            if not pincode or pincode not in c["pin_codes"]:
-                continue
+        if c.get("pin_codes") and (not pincode or pincode not in c["pin_codes"]):
+            continue
         if c.get("target_user_ids") and user["id"] not in c["target_user_ids"]:
             continue
+        if c.get("first_order_only") and not first_time:
+            continue  # returning customers never see first-order coupons (no "not eligible" message)
+        if c.get("usage_limit") or c.get("usage_limit_per_customer"):
+            total, mine = usage.get(c["code"].upper(), (0, 0))
+            if (c.get("usage_limit") and total >= c["usage_limit"]) or \
+               (c.get("usage_limit_per_customer") and mine >= c["usage_limit_per_customer"]):
+                continue
+
+        # ---- APPLICATION / cart eligibility: shown, but may be blocked with a reason ----
         ctype = c.get("coupon_type", "product")
         eligible = True
         reason = ""
+        shortfall = 0
         cat_id = c.get("category_id")
         cat_name = None
         if ctype == "product" and cat_id:
             cat_name = await _category_name(cat_id)
-            cat_sub = await _cart_category_subtotal(user["id"], location_id, cat_id)
+            cat_sub = cart_by_cat.get(cat_id, 0.0)
             min_req = c.get("min_order_value", 0)
             if cat_sub <= 0 or cat_sub < min_req:
                 eligible = False
-                reason = (f"Add ₹{round(min_req - cat_sub)} more of {cat_name} items to use"
-                          if cat_sub > 0 else f"Add {cat_name} items to use")
-        elif ctype == "product" and subtotal < c.get("min_order_value", 0):
+                shortfall = max(round(min_req - cat_sub), 0)
+                reason = (f"Add ₹{shortfall} more of {cat_name} products to use"
+                          if cat_sub > 0 else f"Add {cat_name} products worth ₹{round(min_req)} to use")
+        elif ctype == "product" and cart_total < c.get("min_order_value", 0):
             eligible = False
-            reason = f"Add ₹{round(c.get('min_order_value', 0) - subtotal)} more to use"
+            shortfall = round(c.get("min_order_value", 0) - cart_total)
+            reason = f"Add ₹{shortfall} more to use"
         out.append({
             "code": c["code"], "coupon_type": ctype, "delivery_scope": c.get("delivery_scope", "both"),
             "discount_type": c["discount_type"], "discount_value": c["discount_value"],
             "min_order_value": c.get("min_order_value", 0), "max_discount": c.get("max_discount"),
             "category_id": cat_id, "category_name": cat_name,
-            "end_date": c.get("end_date"), "eligible": eligible, "reason": reason,
+            "first_order_only": bool(c.get("first_order_only")),
+            "end_date": c.get("end_date"), "eligible": eligible, "reason": reason, "shortfall": shortfall,
+            "state": "available" if eligible else ("almost" if shortfall > 0 else "condition"),
         })
-    # eligible first
     out.sort(key=lambda x: (not x["eligible"], x["coupon_type"]))
     return out
 
