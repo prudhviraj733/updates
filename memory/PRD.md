@@ -365,3 +365,12 @@ Platform Usage (Website vs App) — real data only:
 - DB business_settings.store_name updated to "SavingSmart Grocery".
 - KEPT as keys/infra (unchanged): DB_NAME=freshly, S3_BUCKET=bestkart, storage prefix freshly-grocery, domain bestkart.in, android package in.bestkart.app, EAS slug bestkart-grocery, deep-link scheme bestkart, firebase project bestkart-d4cbf.
 - Verified: storefront shows SavingSmart, no Freshly/BestKart in rendered body; backend health "SavingSmart Grocery API"; frontend compiles.
+
+## 2026-08-26 — Category-specific coupons (single category)
+- CouponInput gained `category_id` (single category; blank = whole-cart, unchanged behaviour). Delivery coupons never carry a category.
+- Server-side, tamper-proof: `/coupons/validate` now requires auth and, for category coupons, derives the eligible subtotal from the DB cart (products + expanded combo items in that category) — payload.subtotal is ignored for category coupons. Min-spend + fixed/percentage/max-cap all apply to the category subtotal only.
+- `/coupons/available` computes per-category eligibility + reason ("Add ₹X more of <category> items to use") and returns `category_id`/`category_name`. `/coupons` public list includes `category_id`.
+- Order creation (`routers/orders.py`) applies category coupons from the order's own item snapshot (sum of matching-category line_totals) — authoritative, cannot be tampered.
+- Admin (`AdminCoupons.js`): "Eligible category" selector (product coupons only) + amber "<category> only" badge on cards. Checkout shows "<category> items only" label on available + applied coupon.
+- Cart-wide coupons unchanged (regression-tested). Usage limits intentionally NOT enforced this round (user choice).
+- Tests: `backend/tests/test_category_coupon.py` (other-cat reject, below/above min, max-cap, tamper-proof, mixed cart, cart-wide regression) + `test_category_coupon_order.py` (order placement w/ mixed cart, discount matches, order cleaned up). All PASS.

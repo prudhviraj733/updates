@@ -76,7 +76,7 @@ def run():
     print("ORDER CATEGORY COUPON:", "PASS" if ok else "FAIL")
 
 def _first_slot(cust, loc_id):
-    d = cust.get(f"{API}/delivery/slots/range", params={"days": 3}).json()
+    d = cust.get(f"{API}/delivery/slots/range", params={"days": 3, "location_id": loc_id}).json()
     for day in d.get("days", []):
         for s in day.get("slots", []):
             if s.get("available"): return s["id"]
