@@ -225,10 +225,20 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
     free_delivery_applied = False
     if payload.coupon_code:
         coupon = await db.coupons.find_one({"code": payload.coupon_code.upper(), "is_active": True}, {"_id": 0})
-        if coupon and subtotal >= coupon.get("min_order_value", 0):
-            coupon_discount = _calc_discount(coupon, subtotal)
-            coupon_code = coupon["code"]
-        else:
+        applied = False
+        if coupon:
+            if coupon.get("category_id"):
+                cat_sub = round(sum(it["line_total"] for it in items
+                                    if it.get("category_id") == coupon["category_id"]), 2)
+                if cat_sub > 0 and cat_sub >= coupon.get("min_order_value", 0):
+                    coupon_discount = _calc_discount(coupon, cat_sub)
+                    coupon_code = coupon["code"]
+                    applied = True
+            elif subtotal >= coupon.get("min_order_value", 0):
+                coupon_discount = _calc_discount(coupon, subtotal)
+                coupon_code = coupon["code"]
+                applied = True
+        if not applied:
             from routers.personalization import resolve_personalized
             try:
                 pc = await resolve_personalized(payload.coupon_code, user["id"], payload.location_id, subtotal)

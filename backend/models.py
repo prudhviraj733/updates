@@ -286,6 +286,7 @@ class CouponInput(BaseModel):
     is_active: bool = True
     location_ids: List[str] = []
     category_ids: List[str] = []
+    category_id: Optional[str] = None            # single-category targeting (product coupons only)
     pin_codes: List[str] = []                     # PIN-code targeting (empty = all serviceable PINs)
     target_user_ids: List[str] = []              # specific customer targeting (empty = all)
     usage_limit: Optional[int] = None            # total redemptions allowed

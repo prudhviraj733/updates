@@ -42,8 +42,41 @@ async def _find_coupon(code: str):
     return await db.coupons.find_one({"code": code.upper(), "is_active": True}, {"_id": 0})
 
 
+async def _category_name(cid: str) -> str:
+    if not cid:
+        return "selected"
+    cat = await db.categories.find_one({"id": cid}, {"_id": 0, "name": 1})
+    return cat["name"] if cat else "selected"
+
+
+async def _cart_category_subtotal(user_id: str, location_id: str, category_id: str) -> float:
+    """Server-derived subtotal of cart lines belonging to a category (products + combo items)."""
+    cart = await db.carts.find_one({"user_id": user_id, "location_id": location_id})
+    if not cart or not cart.get("items"):
+        return 0.0
+    total = 0.0
+    for ci in cart["items"]:
+        if ci.get("type") == "combo":
+            pkg = await db.packages.find_one({"id": ci["combo_id"], "is_active": True}, {"_id": 0})
+            if not pkg:
+                continue
+            from routers.packages import price_and_validate_combo
+            try:
+                priced = await price_and_validate_combo(pkg, ci.get("selections", {}), location_id, validate_stock=False)
+            except Exception:
+                continue
+            for li in priced["items"]:
+                if li.get("category_id") == category_id:
+                    total += li["unit_price"] * li["quantity"]
+        else:
+            product = await db.products.find_one({"id": ci["product_id"]}, {"_id": 0})
+            if product and product.get("is_active") and product.get("category_id") == category_id:
+                total += product["selling_price"] * ci["quantity"]
+    return round(total, 2)
+
+
 @router.post("/coupons/validate")
-async def validate_coupon(payload: CouponValidateInput):
+async def validate_coupon(payload: CouponValidateInput, user: dict = Depends(get_current_user)):
     coupon = await _find_coupon(payload.code)
     if not coupon:
         raise HTTPException(status_code=404, detail="Invalid coupon code")
@@ -78,6 +111,21 @@ async def validate_coupon(payload: CouponValidateInput):
         return {"code": coupon["code"], "coupon_type": "delivery", "delivery_scope": coupon.get("delivery_scope", "both"),
                 "discount": discount, "message": "Delivery coupon applied"}
 
+    # ---- Category-specific product coupon (server-derived category subtotal) ----
+    if coupon.get("category_id"):
+        cat_id = coupon["category_id"]
+        cat_name = await _category_name(cat_id)
+        cat_sub = await _cart_category_subtotal(user["id"], payload.location_id, cat_id)
+        min_req = coupon.get("min_order_value", 0)
+        if cat_sub <= 0:
+            raise HTTPException(status_code=400, detail=f"Add {cat_name} items to use this coupon")
+        if cat_sub < min_req:
+            raise HTTPException(status_code=400,
+                                detail=f"Add ₹{round(min_req - cat_sub)} more of {cat_name} items to use this coupon")
+        discount = _calc_discount(coupon, cat_sub)
+        return {"code": coupon["code"], "coupon_type": "product", "category_id": cat_id,
+                "category_name": cat_name, "category_subtotal": cat_sub, "discount": discount,
+                "message": f"Coupon applied on {cat_name} items"}
     if payload.subtotal < coupon.get("min_order_value", 0):
         raise HTTPException(status_code=400, detail=f"Minimum order value ₹{coupon['min_order_value']} required")
     discount = _calc_discount(coupon, payload.subtotal)
@@ -97,7 +145,8 @@ async def list_public_coupons(location_id: str = None):
         if location_id and c.get("location_ids") and location_id not in c["location_ids"]:
             continue
         out.append({k: c.get(k) for k in
-                    ["code", "discount_type", "discount_value", "min_order_value", "max_discount", "end_date"]})
+                    ["code", "discount_type", "discount_value", "min_order_value", "max_discount", "end_date",
+                     "category_id"]})
     return out
 
 
@@ -124,13 +173,24 @@ async def available_coupons(location_id: str, subtotal: float = 0, pincode: str 
         ctype = c.get("coupon_type", "product")
         eligible = True
         reason = ""
-        if ctype == "product" and subtotal < c.get("min_order_value", 0):
+        cat_id = c.get("category_id")
+        cat_name = None
+        if ctype == "product" and cat_id:
+            cat_name = await _category_name(cat_id)
+            cat_sub = await _cart_category_subtotal(user["id"], location_id, cat_id)
+            min_req = c.get("min_order_value", 0)
+            if cat_sub <= 0 or cat_sub < min_req:
+                eligible = False
+                reason = (f"Add ₹{round(min_req - cat_sub)} more of {cat_name} items to use"
+                          if cat_sub > 0 else f"Add {cat_name} items to use")
+        elif ctype == "product" and subtotal < c.get("min_order_value", 0):
             eligible = False
             reason = f"Add ₹{round(c.get('min_order_value', 0) - subtotal)} more to use"
         out.append({
             "code": c["code"], "coupon_type": ctype, "delivery_scope": c.get("delivery_scope", "both"),
             "discount_type": c["discount_type"], "discount_value": c["discount_value"],
             "min_order_value": c.get("min_order_value", 0), "max_discount": c.get("max_discount"),
+            "category_id": cat_id, "category_name": cat_name,
             "end_date": c.get("end_date"), "eligible": eligible, "reason": reason,
         })
     # eligible first

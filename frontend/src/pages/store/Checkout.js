@@ -399,7 +399,7 @@ export default function Checkout() {
                     <div key={c.code} className="flex items-center justify-between rounded-xl border border-dashed border-forest/40 px-3 py-2 text-sm" data-testid={`avail-coupon-${c.code}`}>
                       <div>
                         <span className="font-mono font-semibold text-forest">{c.code}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">{c.discount_type === "percentage" ? `${c.discount_value}% off` : `${inr(c.discount_value)} off`}{c.coupon_type === "delivery" ? ` · delivery (${c.delivery_scope})` : ""}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{c.discount_type === "percentage" ? `${c.discount_value}% off` : `${inr(c.discount_value)} off`}{c.coupon_type === "delivery" ? ` · delivery (${c.delivery_scope})` : ""}{c.category_name ? ` · ${c.category_name} items only` : ""}</span>
                         {!c.eligible && c.reason && <p className="text-xs text-amber-600">{c.reason}</p>}
                       </div>
                       <Button size="sm" variant="outline" className="h-7 rounded-full text-xs" disabled={!c.eligible} onClick={() => applyByCode(c.code)} data-testid={`apply-avail-${c.code}`}>Apply</Button>
@@ -417,7 +417,7 @@ export default function Checkout() {
             <div className="mt-2 space-y-1">
               {productCoupon && (
                 <div className="flex items-center justify-between rounded-lg bg-forest-light px-3 py-1.5 text-sm" data-testid="applied-product-coupon">
-                  <span className="font-mono text-forest">{productCoupon.code}</span>
+                  <span className="font-mono text-forest">{productCoupon.code}{productCoupon.category_name ? <span className="ml-1 font-sans text-xs text-forest/70">({productCoupon.category_name} items)</span> : null}</span>
                   <span className="flex items-center gap-2 text-forest">-{inr(productCoupon.discount)}<button onClick={() => removeCoupon("product")} className="text-xs underline">remove</button></span>
                 </div>
               )}

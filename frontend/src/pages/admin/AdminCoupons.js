@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const EMPTY = { code: "", coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 0, min_order_value: 0, max_discount: null, start_date: "", end_date: "", pin_codes: [], usage_limit: null, usage_limit_per_customer: null, is_active: true, location_ids: [], category_ids: [] };
+const EMPTY = { code: "", coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 0, min_order_value: 0, max_discount: null, start_date: "", end_date: "", pin_codes: [], usage_limit: null, usage_limit_per_customer: null, is_active: true, location_ids: [], category_ids: [], category_id: null };
 const BULK_EMPTY = { prefix: "SAVE", count: 10, coupon_type: "product", delivery_scope: "both", discount_type: "percentage", discount_value: 10, min_order_value: 0, max_discount: null, usage_limit: 1, usage_limit_per_customer: 1 };
 
 export default function AdminCoupons() {
@@ -19,6 +19,7 @@ export default function AdminCoupons() {
   const typeFilter = params.get("type");
   const scopeFilter = params.get("scope");
   const [coupons, setCoupons] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -26,7 +27,9 @@ export default function AdminCoupons() {
   const [bulk, setBulk] = useState(BULK_EMPTY);
 
   const load = () => api.get("/admin/coupons").then(({ data }) => setCoupons(data));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); api.get("/categories").then(({ data }) => setCategories(data)).catch(() => {}); }, []);
+
+  const catName = (id) => categories.find((c) => c.id === id)?.name;
 
   useEffect(() => {
     const action = params.get("action");
@@ -41,7 +44,7 @@ export default function AdminCoupons() {
   });
 
   const save = async () => {
-    const payload = { ...form, discount_value: Number(form.discount_value), min_order_value: Number(form.min_order_value), max_discount: form.max_discount ? Number(form.max_discount) : null, usage_limit: form.usage_limit ? Number(form.usage_limit) : null, usage_limit_per_customer: form.usage_limit_per_customer ? Number(form.usage_limit_per_customer) : null };
+    const payload = { ...form, discount_value: Number(form.discount_value), min_order_value: Number(form.min_order_value), max_discount: form.max_discount ? Number(form.max_discount) : null, usage_limit: form.usage_limit ? Number(form.usage_limit) : null, usage_limit_per_customer: form.usage_limit_per_customer ? Number(form.usage_limit_per_customer) : null, category_id: form.coupon_type === "product" ? (form.category_id || null) : null };
     try {
       if (editing) await api.put(`/admin/coupons/${editing.id}`, payload);
       else await api.post("/admin/coupons", payload);
@@ -78,6 +81,7 @@ export default function AdminCoupons() {
             </div>
             <div className="mt-2 flex gap-2">
               <Badge className={c.coupon_type === "delivery" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}>{c.coupon_type === "delivery" ? `Delivery · ${c.delivery_scope}` : "Product/Order"}</Badge>
+              {c.category_id && <Badge className="bg-amber-100 text-amber-700" data-testid={`coupon-cat-badge-${c.id}`}>{catName(c.category_id) || "Category"} only</Badge>}
             </div>
             <p className="mt-2 text-sm">{c.discount_type === "percentage" ? `${c.discount_value}% off` : `${inr(c.discount_value)} off`}{c.max_discount ? ` (max ${inr(c.max_discount)})` : ""}</p>
             <p className="text-xs text-slate-400">Min order {inr(c.min_order_value)}</p>
@@ -107,6 +111,18 @@ export default function AdminCoupons() {
                 </div>
               )}
             </div>
+            {form.coupon_type === "product" && (
+              <div><Label>Eligible category (blank = whole cart)</Label>
+                <Select value={form.category_id || "__all__"} onValueChange={(v) => setForm({ ...form, category_id: v === "__all__" ? null : v })}>
+                  <SelectTrigger data-testid="coupon-category"><SelectValue placeholder="Whole cart" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Whole cart (all products)</SelectItem>
+                    {categories.map((c) => <SelectItem key={c.id} value={c.id} data-testid={`coupon-category-${c.id}`}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {form.category_id && <p className="mt-1 text-xs text-slate-500">Min spend &amp; discount apply only to <b>{catName(form.category_id)}</b> items.</p>}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Discount type</Label><select className="w-full rounded-md border p-2" value={form.discount_type} onChange={(e) => setForm({ ...form, discount_type: e.target.value })}><option value="percentage">Percentage</option><option value="fixed">Fixed</option></select></div>
               <div><Label>Value</Label><Input type="number" data-testid="coupon-value" value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: e.target.value })} /></div>
