@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Truck, Check, ExternalLink, ShieldCheck, Navigation, MapPin, Copy, Phone } from "lucide-react";
+import { ArrowLeft, Truck, Check, ExternalLink, ShieldCheck, Navigation, MapPin, Copy, Phone, FileText, Printer } from "lucide-react";
 import api, { inr } from "@/lib/api";
+import { getReceipt } from "@/lib/receipt";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +67,8 @@ export default function AdminOrderDetail() {
           )}
           <Badge className={order.is_priority ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"}>{order.is_priority ? "30-Min Delivery" : "Scheduled"}</Badge>
           <Badge className="bg-forest-light text-forest">{order.customer_status}</Badge>
+          <Button variant="outline" size="sm" className="rounded-full" onClick={() => getReceipt(`/orders/${order.id}/receipt?download=1`, `Receipt-${order.order_number}.pdf`)} data-testid="admin-download-receipt-btn"><FileText className="mr-1 h-4 w-4" />Receipt</Button>
+          <Button variant="ghost" size="sm" className="rounded-full" onClick={() => getReceipt(`/orders/${order.id}/receipt`, `Receipt-${order.order_number}.pdf`, { print: true })} data-testid="admin-print-receipt-btn"><Printer className="mr-1 h-4 w-4" />Print</Button>
         </div>
       </div>
 

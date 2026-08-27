@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight, Plus, Banknote } from "lucide-react";
+import { Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight, Plus, Banknote, FileText } from "lucide-react";
 import api, { inr } from "@/lib/api";
+import { getReceipt } from "@/lib/receipt";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,9 @@ export default function Wallet() {
             <div className="text-right">
               <p className={`font-semibold ${l.amount >= 0 ? "text-forest" : "text-red-500"}`}>{l.amount >= 0 ? "+" : ""}{inr(l.amount)}</p>
               <p className="text-xs text-muted-foreground">Bal {inr(l.balance_after)}</p>
+              {(l.status || "completed") !== "cancelled" && l.txn_id && (
+                <button onClick={() => getReceipt(`/wallet/receipt/${l.txn_id}?download=1`, `Wallet-${l.txn_id}.pdf`)} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-forest hover:underline" data-testid={`wallet-receipt-${l.id}`}><FileText className="h-3.5 w-3.5" />Receipt</button>
+              )}
             </div>
           </div>
         ))}

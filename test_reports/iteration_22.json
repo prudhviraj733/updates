@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only verification of PDF receipt wiring. Customer (customer@test.com) order detail Download + Print buttons, wallet ledger Receipt links, and admin order detail Receipt/Print buttons all fetch a real PDF (HTTP 200, content-type application/pdf, body starts with %PDF). Security verified: customer requesting two other customers' order receipts got 403 {'detail':'Not allowed'}; admin fetched a foreign customer's order receipt successfully (200 PDF); unauthenticated fetch returns 401; unknown wallet txn / return id return 404. Refund-receipt link could NOT be exercised in the UI because the returns collection is empty (0 documents, no refunded returns) - conditional render never mounts.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Customer order detail (/orders/:id)", "issues": ["Totals row is labelled 'Total paid' even for COD orders with payment_status=pending and for cancelled orders (e.g. FG260800051, FG260800049 show 'Payment: Cash on Delivery - Pending' but 'Total paid Rs.1,318.2'). Admin screen correctly says 'Total payable'. Pre-existing, not receipt-related, but inconsistent with the PDF which shows 'Amount Payable' + 'Pending'."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_receipts.py", "/app/backend/tests/test_refund_receipt.py"],
+  "action_items": [
+    "Optional: relabel 'Total paid' to 'Total payable' on customer order detail when payment_status != paid (consistency with PDF + admin UI).",
+    "Refund receipt UI link (data-testid=refund-receipt-<id>) remains unverified end-to-end in the browser - no return/refund records exist in DB. Seed or create a refunded return if UI verification is required."
+  ],
+  "critical_code_review_comments": [
+    "receipts.py: helper _oid is defined after wallet_receipt uses it (works at runtime, module-level) - fine but move above for readability.",
+    "receipt.js getReceipt() has no try/catch: a 403/404/500 blob response will reject and surface only as an unhandled promise (no toast). Callers should catch and show an error toast."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not in scope this run)", "frontend": "100% of testable receipt flows (5/5); refund-receipt link untestable due to missing data"},
+  "seed_data_creation": "None - no destructive orders or returns created.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin prudhvirajm847@gmail.com / Admin@12345; customer customer@test.com / Test@12345 (both work)",
+  "context_for_next_testing_agent": "Receipt endpoints: /api/orders/{id}/receipt, /api/wallet/receipt/{txn_id}, /api/returns/{id}/receipt. Customer uid=6a82057f53d0704bf07b57df; foreign order ids for 403 checks: 5bdf72e8-7997-4687-9410-c7fbc9c06aaa, e454f2ac-2db2-40eb-b4f2-e0413e4d4e30. db.returns is empty so refund receipt UI cannot be tested without seeding.",
+  "rca_of_the_issue": "No functional defect found in this run."
+}

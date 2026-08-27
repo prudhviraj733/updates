@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Package, ChevronRight, Zap, Clock, ExternalLink, CheckCircle2, Circle } from "lucide-react";
+import { Package, ChevronRight, Zap, Clock, ExternalLink, CheckCircle2, Circle, FileText, Printer } from "lucide-react";
 import api, { inr } from "@/lib/api";
+import { getReceipt } from "@/lib/receipt";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -154,7 +155,11 @@ export function OrderDetail() {
           {(order.express_charge ?? order.asap_charge) > 0 && <div className="flex justify-between text-saffron"><span>Get in 30 Minutes</span><span>+{inr(order.express_charge ?? order.asap_charge)}</span></div>}
           {order.delivery_discount > 0 && <div className="flex justify-between text-blue-700"><span>Delivery coupon ({order.delivery_coupon_code})</span><span>-{inr(order.delivery_discount)}</span></div>}
           {order.wallet_used > 0 && <div className="flex justify-between text-forest"><span>Wallet</span><span>-{inr(order.wallet_used)}</span></div>}
-          <div className="flex justify-between pt-2 text-lg font-bold"><span>Total paid</span><span>{inr(order.final_amount)}</span></div>
+          <div className="flex justify-between pt-2 text-lg font-bold"><span>{order.payment_status === "paid" ? "Total paid" : "Total payable"}</span><span>{inr(order.final_amount)}</span></div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
+          <Button variant="outline" className="rounded-full" onClick={() => getReceipt(`/orders/${order.id}/receipt?download=1`, `Receipt-${order.order_number}.pdf`)} data-testid="download-receipt-btn"><FileText className="mr-1.5 h-4 w-4" />Download Receipt</Button>
+          <Button variant="ghost" className="rounded-full" onClick={() => getReceipt(`/orders/${order.id}/receipt`, `Receipt-${order.order_number}.pdf`, { print: true })} data-testid="print-receipt-btn"><Printer className="mr-1.5 h-4 w-4" />Print</Button>
         </div>
       </div>
 
@@ -173,7 +178,10 @@ export function OrderDetail() {
               {returns.map((r) => (
                 <div key={r.id} className="flex items-center justify-between text-sm" data-testid={`my-return-${r.id}`}>
                   <span>{r.product_name} × {r.quantity} · <span className="capitalize">{r.type}</span></span>
-                  <Badge className={r.status === "rejected" ? "bg-red-100 text-red-700" : ["refunded", "replaced"].includes(r.status) ? "bg-forest-light text-forest" : "bg-amber-100 text-amber-700"}>{RETURN_STATUS_LABELS[r.status] || r.customer_status_label}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={r.status === "rejected" ? "bg-red-100 text-red-700" : ["refunded", "replaced"].includes(r.status) ? "bg-forest-light text-forest" : "bg-amber-100 text-amber-700"}>{RETURN_STATUS_LABELS[r.status] || r.customer_status_label}</Badge>
+                    {r.status === "refunded" && r.refund && <button onClick={() => getReceipt(`/returns/${r.id}/receipt?download=1`, `Refund-${r.request_number}.pdf`)} className="inline-flex items-center gap-1 text-xs font-medium text-forest hover:underline" data-testid={`refund-receipt-${r.id}`}><FileText className="h-3.5 w-3.5" />Refund receipt</button>}
+                  </div>
                 </div>
               ))}
             </div>

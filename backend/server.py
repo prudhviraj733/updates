@@ -17,7 +17,7 @@ from routers import (
     cart, wishlist, delivery, orders, coupons, payments, packages,
     settings, admin_misc, uploads, combo_banners, personalization,
     brands, pincodes, analytics, wallet, referral, customers, returns, usage,
-    notifications_center, seo,
+    notifications_center, seo, receipts,
 )
 from core.fcm import init_fcm
 
@@ -37,7 +37,7 @@ for module in (auth, addresses, locations, categories, products, inventory,
                cart, wishlist, delivery, orders, coupons, payments, packages,
                settings, admin_misc, uploads, combo_banners, personalization,
                brands, pincodes, analytics, wallet, referral, customers, returns, usage,
-               notifications_center, seo):
+               notifications_center, seo, receipts):
     app.include_router(module.router, prefix="/api")
 
 
