@@ -27,6 +27,11 @@ DEFAULTS = {
         {"name": "Silver", "min_orders": 5, "cashback_percent": 3},
         {"name": "Gold", "min_orders": 15, "cashback_percent": 5},
     ],
+    "gst_enabled": False,
+    "gstin": "",
+    "gst_pricing": "inclusive",
+    "gst_split": "cgst_sgst",
+    "gst_default_rate": 0.0,
 }
 
 

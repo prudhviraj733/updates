@@ -150,12 +150,18 @@ export function OrderDetail() {
         </div>
         <div className="mt-4 space-y-1 border-t pt-4 text-sm">
           <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{inr(order.subtotal)}</span></div>
+          {order.gst?.enabled && order.gst.pricing === "exclusive" && (order.gst.total_tax || 0) > 0 && (order.gst.by_rate || []).map((b) => (
+            <div key={b.rate} className="flex justify-between text-muted-foreground"><span>GST @ {b.rate}%</span><span>+{inr(b.tax)}</span></div>
+          ))}
           {order.coupon_discount > 0 && <div className="flex justify-between text-forest"><span>Coupon ({order.coupon_code})</span><span>-{inr(order.coupon_discount)}</span></div>}
           <div className="flex justify-between"><span className="text-muted-foreground">Delivery</span><span>{inr(order.delivery_charge)}</span></div>
           {(order.express_charge ?? order.asap_charge) > 0 && <div className="flex justify-between text-saffron"><span>Get in 30 Minutes</span><span>+{inr(order.express_charge ?? order.asap_charge)}</span></div>}
           {order.delivery_discount > 0 && <div className="flex justify-between text-blue-700"><span>Delivery coupon ({order.delivery_coupon_code})</span><span>-{inr(order.delivery_discount)}</span></div>}
           {order.wallet_used > 0 && <div className="flex justify-between text-forest"><span>Wallet</span><span>-{inr(order.wallet_used)}</span></div>}
           <div className="flex justify-between pt-2 text-lg font-bold"><span>{order.payment_status === "paid" ? "Total paid" : "Total payable"}</span><span>{inr(order.final_amount)}</span></div>
+          {order.gst?.enabled && (order.gst.total_tax || 0) > 0 && (
+            <p className="pt-1 text-xs text-muted-foreground" data-testid="order-gst-note">{order.gst.pricing === "inclusive" ? "Inclusive of" : "Includes"} GST {inr(order.gst.total_tax)}{order.gst.gstin ? ` · GSTIN ${order.gst.gstin}` : ""}</p>
+          )}
         </div>
         <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
           <Button variant="outline" className="rounded-full" onClick={() => getReceipt(`/orders/${order.id}/receipt?download=1`, `Receipt-${order.order_number}.pdf`)} data-testid="download-receipt-btn"><FileText className="mr-1.5 h-4 w-4" />Download Receipt</Button>

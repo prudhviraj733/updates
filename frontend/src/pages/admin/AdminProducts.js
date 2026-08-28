@@ -13,7 +13,7 @@ import { ImageUpload } from "@/components/admin/ImageUpload";
 
 const EMPTY = {
   name: "", description: "", category_id: "", subcategory_id: null, brand_id: null, images: [], pack_size: "", unit: "",
-  mrp: 0, selling_price: 0, cost_price: 0, sku: "", is_active: true, is_featured: false, location_ids: [],
+  mrp: 0, selling_price: 0, cost_price: 0, gst_rate: 0, sku: "", is_active: true, is_featured: false, location_ids: [],
 };
 
 export default function AdminProducts() {
@@ -43,7 +43,7 @@ export default function AdminProducts() {
     if (!form.subcategory_id) { toast.error("Please select a subcategory"); return; }
     const payload = {
       ...form,
-      mrp: Number(form.mrp), selling_price: Number(form.selling_price), cost_price: Number(form.cost_price) || 0,
+      mrp: Number(form.mrp), selling_price: Number(form.selling_price), cost_price: Number(form.cost_price) || 0, gst_rate: Number(form.gst_rate) || 0,
       images: imageStr.split(",").map((s) => s.trim()).filter(Boolean),
     };
     try {
@@ -105,6 +105,7 @@ export default function AdminProducts() {
               <div><Label>MRP</Label><Input type="number" data-testid="product-mrp" value={form.mrp} onChange={(e) => setForm({ ...form, mrp: e.target.value })} /></div>
               <div><Label>Selling price</Label><Input type="number" data-testid="product-price" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} /></div>
               <div><Label>Cost price</Label><Input type="number" data-testid="product-cost" value={form.cost_price} onChange={(e) => setForm({ ...form, cost_price: e.target.value })} /></div>
+              <div><Label>GST rate %</Label><select className="w-full rounded-md border p-2" data-testid="product-gst" value={form.gst_rate ?? 0} onChange={(e) => setForm({ ...form, gst_rate: e.target.value })}><option value={0}>0%</option><option value={5}>5%</option><option value={12}>12%</option><option value={18}>18%</option><option value={28}>28%</option></select></div>
             </div>
             <div>
               <div className="flex items-center justify-between"><Label>Product images</Label><ImageUpload onUploaded={(url) => setImageStr((s) => (s ? `${s}, ${url}` : url))} /></div>

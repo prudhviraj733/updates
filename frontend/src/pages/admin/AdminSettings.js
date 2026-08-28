@@ -24,6 +24,8 @@ export default function AdminSettings() {
         milestone_enabled: s.milestone_enabled, milestone_rewards: s.milestone_rewards,
         withdrawals_enabled: s.withdrawals_enabled, min_withdrawal: Number(s.min_withdrawal),
         withdrawable_sources: s.withdrawable_sources,
+        gst_enabled: s.gst_enabled, gstin: s.gstin, gst_pricing: s.gst_pricing,
+        gst_split: s.gst_split, gst_default_rate: Number(s.gst_default_rate) || 0,
       });
       toast.success("Settings saved");
     } catch (e) { toast.error("Error"); }
@@ -80,6 +82,20 @@ export default function AdminSettings() {
               <button key={src} onClick={() => toggleSource(src)} data-testid={`wsrc-${src}`} className={`rounded-full border px-3 py-1 text-xs capitalize ${(s.withdrawable_sources || []).includes(src) ? "border-forest bg-forest text-white" : "text-slate-500"}`}>{src.replace("_", " ")}</button>
             ))}
           </div>
+        </div>
+
+        <div className="rounded-xl border bg-white p-5" data-testid="gst-settings">
+          <h2 className="font-semibold">GST / Tax</h2>
+          <label className="mt-3 flex items-center justify-between text-sm"><span>Enable GST</span><Switch checked={!!s.gst_enabled} onCheckedChange={(v) => setS({ ...s, gst_enabled: v })} data-testid="gst-toggle" /></label>
+          <p className="mt-1 text-xs text-slate-500">When off, no GST is charged or shown and receipts are not labelled as GST tax invoices. Product GST rates are still stored for future use.</p>
+          {s.gst_enabled && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div><Label>GSTIN (leave blank until registered)</Label><Input data-testid="gstin" value={s.gstin || ""} onChange={(e) => setS({ ...s, gstin: e.target.value.toUpperCase() })} placeholder="e.g. 29ABCDE1234F1Z5" /></div>
+              <div><Label>Pricing</Label><select className="w-full rounded-md border p-2" data-testid="gst-pricing" value={s.gst_pricing || "inclusive"} onChange={(e) => setS({ ...s, gst_pricing: e.target.value })}><option value="inclusive">Tax inclusive (price already includes GST)</option><option value="exclusive">Tax exclusive (GST added on top)</option></select></div>
+              <div><Label>Tax split</Label><select className="w-full rounded-md border p-2" data-testid="gst-split" value={s.gst_split || "cgst_sgst"} onChange={(e) => setS({ ...s, gst_split: e.target.value })}><option value="cgst_sgst">CGST + SGST (intra-state)</option><option value="igst">IGST (inter-state)</option></select></div>
+              <div><Label>Default GST rate %</Label><Input type="number" data-testid="gst-default-rate" value={s.gst_default_rate ?? ""} onChange={(e) => setS({ ...s, gst_default_rate: e.target.value })} /></div>
+            </div>
+          )}
         </div>
 
         <Button className="bg-forest hover:bg-forest-dark" onClick={save} data-testid="save-settings-btn">Save settings</Button>

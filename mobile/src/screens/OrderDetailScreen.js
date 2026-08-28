@@ -51,6 +51,9 @@ export default function OrderDetailScreen() {
         <Row l="Delivery" v={inr(order.delivery_charge)} />
         {expressCharge > 0 && <Row l="30-min delivery charge" v={inr(expressCharge)} />}
         {order.wallet_used > 0 && <Row l="Wallet" v={`- ${inr(order.wallet_used)}`} />}
+        {order.gst?.enabled && (order.gst.by_rate || []).map((b) => (
+          <Row key={b.rate} l={`GST @ ${b.rate}%${order.gst.pricing === "inclusive" ? " (incl.)" : ""}`} v={`${order.gst.pricing === "inclusive" ? "" : "+ "}${inr(b.tax)}`} />
+        ))}
         <Row l="Total" v={inr(order.final_amount)} bold />
         <Row l="Payment" v={`${(order.payment_method || "").toUpperCase()} · ${order.payment_status || ""}`} />
       </View>

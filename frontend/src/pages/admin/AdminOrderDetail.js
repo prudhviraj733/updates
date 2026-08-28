@@ -155,6 +155,10 @@ export default function AdminOrderDetail() {
             {(order.express_charge ?? order.asap_charge) > 0 && <Row l="30-min delivery charge" v={inr(order.express_charge ?? order.asap_charge)} />}
             {order.delivery_discount > 0 && <Row l={`Delivery coupon ${order.delivery_coupon_code || ""}`} v={`- ${inr(order.delivery_discount)}`} muted />}
             {order.wallet_used > 0 && <Row l="Wallet used" v={`- ${inr(order.wallet_used)}`} muted />}
+            {order.gst?.enabled && (order.gst.by_rate || []).map((b) => (
+              <Row key={b.rate} l={`GST @ ${b.rate}% (taxable ${inr(b.taxable)})${order.gst.pricing === "inclusive" ? " incl." : ""}`} v={`${order.gst.pricing === "inclusive" ? "" : "+ "}${inr(b.tax)}`} muted />
+            ))}
+            {order.gst?.enabled && <Row l="Total GST" v={inr(order.gst.total_tax)} muted />}
             <div className="my-2 border-t" />
             <Row l="Total payable" v={inr(order.final_amount)} bold />
             {order.product_discount > 0 && <p className="mt-1 text-xs text-forest" data-testid="order-mrp-savings">You saved {inr(order.product_discount)} off MRP</p>}

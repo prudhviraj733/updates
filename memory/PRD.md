@@ -366,6 +366,14 @@ Platform Usage (Website vs App) — real data only:
 - KEPT as keys/infra (unchanged): DB_NAME=freshly, S3_BUCKET=bestkart, storage prefix freshly-grocery, domain bestkart.in, android package in.bestkart.app, EAS slug bestkart-grocery, deep-link scheme bestkart, firebase project bestkart-d4cbf.
 - Verified: storefront shows SavingSmart, no Freshly/BestKart in rendered body; backend health "SavingSmart Grocery API"; frontend compiles.
 
+## 2026-08-26 — GST-ready billing/tax system (default OFF)
+- **Config (business_settings)**: `gst_enabled` (default False), `gstin` (blank until registered — never faked), `gst_pricing` (inclusive default | exclusive), `gst_split` (cgst_sgst | igst), `gst_default_rate`. Admin GST section in AdminSettings.js. `ProductInput.gst_rate` stored always (even while GST off). Admin product form has a GST-rate selector (0/5/12/18/28). No migration — legacy products/orders default safely.
+- **Order snapshot (authoritative, immutable)**: `orders.py` computes GST server-side at placement from each item's stored `gst_rate` and stores `order.gst {enabled, pricing, gstin, split, total_tax, taxable_total, by_rate[]}` + per-item `taxable_amount`/`gst_amount`. Inclusive = tax embedded, final_amount unchanged; exclusive = tax added on top. Client-sent gst/final_amount are ignored (recomputed). Historical orders keep their own snapshot forever — enabling/disabling GST or changing product rates never alters past orders.
+- **PDF (receipts.py)**: when the order's snapshot has GST enabled → title "GST TAX INVOICE", per-item Taxable/GST%/GST columns, rate-wise tax summary, Total GST, Seller GSTIN, pricing note. When disabled → title "RECEIPT", no GST/GSTIN. Reads the stored snapshot only.
+- **UI**: customer order detail (Orders.js) + admin order detail + mobile OrderDetailScreen show GST breakdown from the snapshot; hidden when off.
+- **Verified**: backend/tests/test_gst.py 12/12 (OFF no-tax, inclusive 5% embedded + total unchanged, multi-rate cart, exclusive adds tax, API-manipulation ignored, historical immutability, PDFs render) + GST invoice PDF visually confirmed. Frontend compiles.
+- Limitation: checkout live per-line GST not shown pre-order (cart items don't carry gst_rate); GST appears on order confirmation/detail/PDF. Combo-bundle items snapshot gst_rate=0.
+
 ## 2026-08-26 — Transaction PDF receipts (orders, wallet, refunds)
 - **New**: `backend/routers/receipts.py` (reportlab) generates branded PDF receipts on demand from authoritative DB data — no storage, no migration, historical amounts never recalculated. Registered in server.py.
 - **Endpoints** (ownership-checked; `?download=1` = attachment, else inline for printing): `GET /api/orders/{id}/receipt` (COD + Razorpay; customer-own or admin), `GET /api/wallet/receipt/{txn_id}` (customer-own or admin), `GET /api/returns/{id}/receipt` (refund; customer-own or admin; 400 if no refund yet).

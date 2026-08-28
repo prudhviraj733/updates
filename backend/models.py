@@ -217,6 +217,7 @@ class ProductInput(BaseModel):
     mrp: float = 0
     selling_price: float = 0
     cost_price: float = 0
+    gst_rate: float = 0
     sku: str = ""
     is_active: bool = True
     is_featured: bool = False
@@ -398,6 +399,12 @@ class BusinessSettingsInput(BaseModel):
     # Loyalty tiers
     loyalty_enabled: Optional[bool] = None
     loyalty_tiers: Optional[List[dict]] = None         # [{name, min_orders, cashback_percent}]
+    # GST / tax (GST-ready; off by default)
+    gst_enabled: Optional[bool] = None
+    gstin: Optional[str] = None                        # blank until registered; never fake
+    gst_pricing: Optional[str] = None                  # inclusive | exclusive
+    gst_split: Optional[str] = None                    # cgst_sgst | igst
+    gst_default_rate: Optional[float] = None
 
 
 class WalletTopupInput(BaseModel):

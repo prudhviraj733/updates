@@ -156,6 +156,7 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
                     "pack_size": li["pack_size"], "unit_price": li["unit_price"], "mrp": li["mrp"],
                     "cost_price": li["cost_price"], "category_id": li["category_id"],
                     "subcategory_id": li["subcategory_id"], "brand_id": li["brand_id"],
+                    "gst_rate": 0,
                     "quantity": li["quantity"], "line_total": round(line, 2),
                     "combo_id": pkg["id"], "combo_name": pkg["name"],
                 })
@@ -185,6 +186,7 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
             "category_id": product.get("category_id"),
             "subcategory_id": product.get("subcategory_id"),
             "brand_id": product.get("brand_id"),
+            "gst_rate": float(product.get("gst_rate") or 0),
             "quantity": ci["quantity"], "line_total": round(line, 2),
         })
 
@@ -277,6 +279,46 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
     final_amount = round(subtotal - coupon_discount + delivery_charge + express_charge - delivery_discount, 2)
     final_amount = max(0.0, final_amount)
 
+    # ---- GST snapshot (server-authoritative; stored on the order, never recalculated later) ----
+    from routers.settings import load_settings as _load_biz
+    bcfg = await _load_biz()
+    gst_enabled = bool(bcfg.get("gst_enabled"))
+    gst_pricing = bcfg.get("gst_pricing", "inclusive")
+    gst_tax_total = 0.0
+    gst_taxable_total = 0.0
+    by_rate = {}
+    if gst_enabled:
+        for it in items:
+            rate = float(it.get("gst_rate") or 0)
+            lt = it.get("line_total", 0)
+            if gst_pricing == "exclusive":
+                taxable = round(lt, 2)
+                tax = round(lt * rate / 100, 2)
+            else:  # inclusive: tax is embedded in the shown price
+                taxable = round(lt * 100 / (100 + rate), 2) if rate else round(lt, 2)
+                tax = round(lt - taxable, 2)
+            it["taxable_amount"] = taxable
+            it["gst_amount"] = tax
+            gst_tax_total += tax
+            gst_taxable_total += taxable
+            key = f"{rate:g}"
+            slot = by_rate.setdefault(key, {"rate": rate, "taxable": 0.0, "tax": 0.0})
+            slot["taxable"] = round(slot["taxable"] + taxable, 2)
+            slot["tax"] = round(slot["tax"] + tax, 2)
+        gst_tax_total = round(gst_tax_total, 2)
+        gst_taxable_total = round(gst_taxable_total, 2)
+        if gst_pricing == "exclusive":
+            final_amount = max(0.0, round(final_amount + gst_tax_total, 2))
+    gst_snapshot = {
+        "enabled": gst_enabled,
+        "pricing": gst_pricing,
+        "gstin": (bcfg.get("gstin") or "") if gst_enabled else "",
+        "split": bcfg.get("gst_split", "cgst_sgst"),
+        "total_tax": gst_tax_total,
+        "taxable_total": gst_taxable_total,
+        "by_rate": sorted(by_rate.values(), key=lambda x: x["rate"]),
+    }
+
     # Redeem wallet balance (partial or full)
     wallet_used = 0.0
     if payload.use_wallet:
@@ -311,6 +353,7 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         "delivery_coupon_code": delivery_coupon_code,
         "delivery_discount": delivery_discount,
         "wallet_used": wallet_used,
+        "gst": gst_snapshot,
         "campaign_id": campaign_id,
         "free_delivery_applied": free_delivery_applied,
         "delivery_charge": delivery_charge,

@@ -136,8 +136,12 @@ def _footer(store_name, email, phone, gst):
 
 # ---------------- Order receipt ----------------
 def build_order_pdf(order: dict, settings: dict) -> bytes:
-    store, email, phone, gst = _store_meta(settings)
-    el = [_header(store, "TAX INVOICE / RECEIPT", f"Receipt No: INV-{order.get('order_number', '')}"),
+    store, email, phone, gst_cfg = _store_meta(settings)
+    gst = order.get("gst") or {}
+    gon = bool(gst.get("enabled"))
+    gstin = gst.get("gstin") or ""
+    title = "GST TAX INVOICE" if gon else "RECEIPT"
+    el = [_header(store, title, f"Receipt No: INV-{order.get('order_number', '')}"),
           Spacer(1, 6 * mm)]
 
     pstatus = (order.get("payment_status") or "pending").title()
@@ -161,9 +165,15 @@ def build_order_pdf(order: dict, settings: dict) -> bytes:
     el += [_two_col(left, bill), Spacer(1, 5 * mm)]
 
     # Items
-    header = [Paragraph("<b>#</b>", S_CELL), Paragraph("<b>Item</b>", S_CELL),
-              Paragraph("<b>Qty</b>", S_CELL), Paragraph("<b>Rate</b>", S_CELL),
-              Paragraph("<b>Amount</b>", S_CELL)]
+    if gon:
+        header = [Paragraph("<b>#</b>", S_CELL), Paragraph("<b>Item</b>", S_CELL),
+                  Paragraph("<b>Qty</b>", S_CELL), Paragraph("<b>Taxable</b>", S_CELL),
+                  Paragraph("<b>GST%</b>", S_CELL), Paragraph("<b>GST</b>", S_CELL),
+                  Paragraph("<b>Amount</b>", S_CELL)]
+    else:
+        header = [Paragraph("<b>#</b>", S_CELL), Paragraph("<b>Item</b>", S_CELL),
+                  Paragraph("<b>Qty</b>", S_CELL), Paragraph("<b>Rate</b>", S_CELL),
+                  Paragraph("<b>Amount</b>", S_CELL)]
     rows = [header]
     for i, it in enumerate(order.get("items", []), 1):
         name = it.get("name", "-")
@@ -171,14 +181,25 @@ def build_order_pdf(order: dict, settings: dict) -> bytes:
         if it.get("combo_name"):
             extra = (extra + " · " if extra else "") + f"Part of {it['combo_name']}"
         cell = f"<b>{name}</b>" + (f"<br/><font size=7 color='#6B7280'>{extra}</font>" if extra else "")
-        rows.append([Paragraph(str(i), S_CELL), Paragraph(cell, S_CELL),
-                     Paragraph(str(it.get("quantity", 1)), S_CELL),
-                     Paragraph(_rs(it.get("unit_price")), S_CELL),
-                     Paragraph(_rs(it.get("line_total")), S_CELL)])
+        if gon:
+            rate = float(it.get("gst_rate") or 0)
+            rows.append([Paragraph(str(i), S_CELL), Paragraph(cell, S_CELL),
+                         Paragraph(str(it.get("quantity", 1)), S_CELL),
+                         Paragraph(_rs(it.get("taxable_amount")), S_CELL),
+                         Paragraph(f"{rate:g}%", S_CELL),
+                         Paragraph(_rs(it.get("gst_amount")), S_CELL),
+                         Paragraph(_rs(it.get("line_total")), S_CELL)])
+        else:
+            rows.append([Paragraph(str(i), S_CELL), Paragraph(cell, S_CELL),
+                         Paragraph(str(it.get("quantity", 1)), S_CELL),
+                         Paragraph(_rs(it.get("unit_price")), S_CELL),
+                         Paragraph(_rs(it.get("line_total")), S_CELL)])
     if len(rows) == 1:
-        rows.append([Paragraph("", S_CELL), Paragraph("No line items recorded for this order.", S_SMALL),
-                     Paragraph("", S_CELL), Paragraph("", S_CELL), Paragraph("", S_CELL)])
-    tbl = Table(rows, colWidths=[8 * mm, 96 * mm, 12 * mm, 26 * mm, 28 * mm])
+        rows.append([Paragraph("", S_CELL), Paragraph("No line items recorded for this order.", S_SMALL)]
+                    + [Paragraph("", S_CELL)] * (len(header) - 2))
+    col_w = [7 * mm, 55 * mm, 9 * mm, 24 * mm, 14 * mm, 24 * mm, 27 * mm] if gon \
+        else [8 * mm, 96 * mm, 12 * mm, 26 * mm, 28 * mm]
+    tbl = Table(rows, colWidths=col_w)
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), LIGHT),
         ("TEXTCOLOR", (0, 0), (-1, 0), FOREST),
@@ -187,6 +208,7 @@ def build_order_pdf(order: dict, settings: dict) -> bytes:
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("FONTSIZE", (0, 0), (-1, -1), 8 if gon else 8.5),
     ]))
     el += [tbl, Spacer(1, 4 * mm)]
 
@@ -208,6 +230,12 @@ def build_order_pdf(order: dict, settings: dict) -> bytes:
         tr.append((lbl, "- " + _rs(order["delivery_discount"]), False))
     if (order.get("wallet_used") or 0) > 0:
         tr.append(("Paid via Wallet", "- " + _rs(order["wallet_used"]), False))
+    if gon:
+        tr.append(("Taxable value", _rs(gst.get("taxable_total")), False))
+        for b in gst.get("by_rate", []):
+            prefix = "incl. " if gst.get("pricing") == "inclusive" else "+ "
+            tr.append((f"GST @ {b['rate']:g}%", prefix + _rs(b.get("tax")), False))
+        tr.append(("Total GST", _rs(gst.get("total_tax")), False))
     tr.append(("Amount Payable", _rs(order.get("final_amount")), True))
     el += [_totals(tr), Spacer(1, 5 * mm)]
 
@@ -218,6 +246,10 @@ def build_order_pdf(order: dict, settings: dict) -> bytes:
         pay_rows.append(("Razorpay Payment ID", order["razorpay_payment_id"]))
     if order.get("razorpay_order_id"):
         pay_rows.append(("Razorpay Order ID", order["razorpay_order_id"]))
+    if gon and gstin:
+        pay_rows.append(("Seller GSTIN", gstin))
+    if gon:
+        pay_rows.append(("Pricing", "Tax inclusive" if gst.get("pricing") == "inclusive" else "Tax exclusive"))
     note = ""
     if (order.get("payment_method") or "").lower() == "cod" and (order.get("payment_status") or "") != "paid":
         note = "This COD order is not yet paid. Payment is collected on delivery."
@@ -226,7 +258,7 @@ def build_order_pdf(order: dict, settings: dict) -> bytes:
     el += [Paragraph("Payment Details", S_H), _kv(pay_rows)]
     if note:
         el += [Spacer(1, 2 * mm), Paragraph(note, S_SMALL)]
-    el += _footer(store, email, phone, gst)
+    el += _footer(store, email, phone, gstin if gon else "")
     return _build(el)
 
 
