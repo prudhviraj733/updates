@@ -290,6 +290,7 @@ class CouponInput(BaseModel):
     category_ids: List[str] = []
     category_id: Optional[str] = None            # single-category targeting (product coupons only)
     first_order_only: bool = False               # visible/usable only for customers with no prior order
+    visibility: str = "public"                    # public (shown in Available Coupons) | private (code-only)
     pin_codes: List[str] = []                     # PIN-code targeting (empty = all serviceable PINs)
     target_user_ids: List[str] = []              # specific customer targeting (empty = all)
     usage_limit: Optional[int] = None            # total redemptions allowed
@@ -311,6 +312,7 @@ class BulkCouponInput(BaseModel):
     location_ids: List[str] = []
     category_id: Optional[str] = None
     first_order_only: bool = False
+    visibility: str = "public"
     usage_limit: Optional[int] = 1
     usage_limit_per_customer: Optional[int] = 1
     campaign_tag: Optional[str] = None

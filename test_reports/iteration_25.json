@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 25: full backend + admin/customer UI verification of coupon PUBLIC/PRIVATE visibility and server-side coupon analytics. Created pytest suite /app/backend/tests/test_coupon_analytics_iter25.py (39 tests) covering create/default/update visibility, available-list filtering + view-event logging, private validate (eligible + ineligible: min-order, first-order-only, category), first-order visibility for a brand-new customer (registered + deleted), analytics for all date ranges + custom, per-coupon stats (public & private), usage history against real existing redeemed orders, admin-auth security on analytics/stats/usage, redemption counts not inflatable via repeated validate calls, and regression (delivery coupon, expiry, invalid code, bulk generate with visibility, /api/coupons). 39/39 passed. Admin UI: dashboard cards, all 5 filters, private badge, mini stats, create-with-visibility dialog, stats page (funnel/metrics/usage table/range buttons/back) all verified, including a coupon with real redemptions (SAVE10: 2 rows, ₹300 discount, ₹8,787 revenue). Customer UI: private coupon absent from Available Coupons modal (12 public listed), public apply/remove works, private code applies via manual entry (-₹25), invalid code shows error. All test coupons, test users, test coupon_events and the temporarily added cart item were cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/coupons/{id}/stats", "issue": "totals.first_time_users is computed as unique_customers - repeat_users, i.e. it means 'customers who used the coupon exactly once', not 'customers on their first order'. Verified on SAVE10 (1 customer, 2 orders) -> first_time_users=0, repeat_users=1. UI label 'First-time users' is therefore misleading; either rename to 'Single-use customers' or derive from _is_first_time/order history."},
+      {"endpoint": "POST/PUT /api/admin/coupons", "issue": "usage_limit=0 (and usage_limit_per_customer=0) is falsy in _assert_eligible/available_coupons, so a 0 limit is silently treated as unlimited instead of blocking. Validate returned 200 for a usage_limit=0 coupon."},
+      {"endpoint": "GET /api/coupons/available", "issue": "One 'view' event is inserted per visible coupon on every call (12 inserts per checkout page load, and the checkout page calls it repeatedly), and db.coupon_events has no index on code/created_at while analytics/stats do full-collection scans in Python. Views inflate quickly and will degrade. Suggest de-duplicating views per user/day and adding indexes on (code, created_at)."},
+      {"endpoint": "GET /api/admin/coupons/analytics", "issue": "Iterates every non-cancelled coupon order and every coupon_event in Python instead of using MongoDB aggregation; fine now but O(all orders) per dashboard load."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin coupon dialogs (Add Coupon / Bulk Generate)", "issues": ["React a11y console warning: 'Missing `Description` or `aria-describedby={undefined}` for {DialogContent}' on both dialogs"]},
+      {"screen": "Admin coupons filter bar", "issues": ["Category filter lists all categories including ones no coupon targets, so selecting them yields an empty grid with no 'no coupons match' empty state message"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_coupon_analytics_iter25.py",
+    "/app/test_reports/pytest/iter25_coupon.xml",
+    "/app/backend/tests/cleanup_iter25.py",
+    "/app/backend/tests/ui_coupon_fixture_iter25.py",
+    "/app/backend/tests/cleanup_cart_iter25.py"
+  ],
+  "action_items": [
+    "Rename/redefine stats.totals.first_time_users (currently = single-use customers, not first-order customers) or fix the AdminCouponStats label.",
+    "Treat usage_limit == 0 as a real zero limit (use `is not None` checks) in _assert_eligible and available_coupons.",
+    "Add indexes on db.coupon_events (code, created_at) and de-duplicate 'view' events per user/coupon/day to stop view inflation from repeated /coupons/available polls.",
+    "Add aria-describedby/DialogDescription to the coupon Add/Bulk dialogs to clear the React a11y warning.",
+    "Optional: add an empty-state message in the admin coupon grid when filters match no coupons."
+  ],
+  "critical_code_review_comments": [
+    "coupons.py is ~640 lines and mixes customer validation, admin CRUD and analytics; consider splitting analytics into routers/coupon_analytics.py.",
+    "Analytics correctly derive redemptions/revenue/discount from db.orders (verified: repeated validate calls left redemptions at 0), and private coupons are excluded from /coupons/available while still validating by code — core design is sound.",
+    "_customer_name does a per-user find inside the usage loop with a local cache — fine, but a single $in query would be cleaner."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/admin/AdminCoupons.js (added missing data-testid=\"edit-coupon-{id}\" on the card edit/pencil button)",
+    "/app/backend/tests/test_coupon_analytics_iter25.py (new)",
+    "/app/backend/tests/cleanup_iter25.py (new)",
+    "/app/backend/tests/ui_coupon_fixture_iter25.py (new)",
+    "/app/backend/tests/cleanup_cart_iter25.py (new)"
+  ],
+  "success_rate": {"backend": "100% (39/39 pytest)", "frontend": "100% of tested admin + customer coupon flows"},
+  "seed_data_creation": "All temporary: TEST*/TB* coupons via /api/admin/coupons (deleted), TESTUIPUB25 + TESTUIPRIV25 for UI (deleted), 2 throwaway customers test_iter25_*@example.com (deleted from db.users), coupon_events for test codes purged, and the one product added to customer@test.com's cart during checkout testing was removed. No orders were created.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345 and customer customer@test.com / Test@12345 both work (from /app/memory/test_credentials.md).",
+  "context_for_next_testing_agent": "Run `pytest tests/test_coupon_analytics_iter25.py` from /app/backend for coupon visibility+analytics regression; it is self-cleaning except db.users/coupon_events leftovers which /app/backend/tests/cleanup_iter25.py purges. Real redeemed coupons in db for usage-history assertions: SAVE10 (id 07726e09-0235-4747-b1a7-1747432e1499, 2 redemptions) and FREEDEL (id 6095d36d-afde-4780-ae4e-adc87b0833f9, 1 delivery redemption). Admin UI option label for private visibility is 'Private — code only, hidden from the list' (em dash) — select via get_by_role('option').filter(has_text='Private'). New customers must register with a real-looking domain (@example.com); @example.test is rejected by EmailStr.",
+  "rca_of_the_issue": "No functional defects found. The only semantic mismatch (first_time_users) stems from stats computing first = unique - repeat, which conflates 'used once' with 'first-time customer'; it does not affect eligibility or revenue numbers."
+}

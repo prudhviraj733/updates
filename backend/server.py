@@ -83,6 +83,8 @@ async def on_startup():
     await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.notifications.create_index("campaign_id")
     await db.notification_campaigns.create_index([("status", 1), ("scheduled_at", 1)])
+    await db.coupon_events.create_index([("code", 1), ("created_at", -1)])
+    await db.coupon_events.create_index([("code", 1), ("user_id", 1), ("type", 1), ("day", 1)])
     init_fcm()
     await run_seed()
     try:

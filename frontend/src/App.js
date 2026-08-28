@@ -46,6 +46,7 @@ import AdminDelivery from "@/pages/admin/AdminDelivery";
 import AdminDeliveryStats from "@/pages/admin/AdminDeliveryStats";
 import AdminAnalytics from "@/pages/admin/AdminAnalytics";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
+import AdminCouponStats from "@/pages/admin/AdminCouponStats";
 import AdminPackages from "@/pages/admin/AdminPackages";
 import AdminComboBanners from "@/pages/admin/AdminComboBanners";
 import AdminCampaigns from "@/pages/admin/AdminCampaigns";
@@ -120,6 +121,7 @@ function App() {
                 <Route path="delivery-stats" element={<AdminDeliveryStats />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="coupons" element={<AdminCoupons />} />
+                <Route path="coupons/:id/stats" element={<AdminCouponStats />} />
                 <Route path="packages" element={<AdminPackages />} />
                 <Route path="combo-banners" element={<AdminComboBanners />} />
                 <Route path="campaigns" element={<AdminCampaigns />} />
