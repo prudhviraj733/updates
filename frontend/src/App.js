@@ -1,6 +1,6 @@
 import "@/App.css";
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import api from "@/lib/api";
 import { detectPlatform } from "@/lib/platform";
@@ -33,6 +33,7 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminProducts from "@/pages/admin/AdminProducts";
 import AdminCategories from "@/pages/admin/AdminCategories";
 import AdminSubcategories from "@/pages/admin/AdminSubcategories";
+import AdminSubSubcategories from "@/pages/admin/AdminSubSubcategories";
 import AdminBrands from "@/pages/admin/AdminBrands";
 import AdminInventory from "@/pages/admin/AdminInventory";
 import AdminLocations from "@/pages/admin/AdminLocations";
@@ -110,6 +111,7 @@ function App() {
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="categories" element={<AdminCategories />} />
                 <Route path="subcategories" element={<AdminSubcategories />} />
+                <Route path="subsubcategories" element={<AdminSubSubcategories />} />
                 <Route path="brands" element={<AdminBrands />} />
                 <Route path="inventory" element={<AdminInventory />} />
                 <Route path="locations" element={<AdminLocations />} />
@@ -130,6 +132,8 @@ function App() {
                 <Route path="payments" element={<AdminPayments />} />
                 <Route path="settings" element={<AdminSettings />} />
               </Route>
+
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
           </NotificationProvider>

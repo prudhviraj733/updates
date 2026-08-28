@@ -29,6 +29,7 @@ async def enrich(product: dict, location_id: Optional[str] = None, pincode: Opti
 async def list_products(
     category_id: Optional[str] = None,
     subcategory_id: Optional[str] = None,
+    subsubcategory_id: Optional[str] = None,
     brand_id: Optional[str] = None,
     location_id: Optional[str] = None,
     pincode: Optional[str] = None,
@@ -44,6 +45,8 @@ async def list_products(
         query["category_id"] = category_id
     if subcategory_id:
         query["subcategory_id"] = subcategory_id
+    if subsubcategory_id:
+        query["subsubcategory_id"] = subsubcategory_id
     if brand_id:
         query["brand_id"] = brand_id
     if location_id:
@@ -84,6 +87,104 @@ async def list_products(
     return result
 
 
+async def _validate_hierarchy(category_id: str, subcategory_id: Optional[str], subsubcategory_id: Optional[str]):
+    """Server-authoritative category > subcategory > sub-subcategory chain validation."""
+    cat = await db.categories.find_one({"id": category_id, "parent_id": None})
+    if not cat:
+        raise HTTPException(status_code=400, detail="Invalid category")
+    if subsubcategory_id and not subcategory_id:
+        raise HTTPException(status_code=400, detail="Select a subcategory before choosing a sub-subcategory")
+    if subcategory_id:
+        sub = await db.categories.find_one({"id": subcategory_id})
+        if not sub or sub.get("parent_id") != category_id:
+            raise HTTPException(status_code=400, detail="Subcategory does not belong to the selected category")
+    if subsubcategory_id:
+        ssub = await db.categories.find_one({"id": subsubcategory_id})
+        if not ssub or ssub.get("parent_id") != subcategory_id:
+            raise HTTPException(status_code=400, detail="Sub-subcategory does not belong to the selected subcategory")
+
+
+async def _pin_enabled_ids(pincode: Optional[str]):
+    if not pincode:
+        return None
+    rows = await db.inventory.find(
+        {"pincode": pincode, "enabled": {"$ne": False}}, {"_id": 0, "product_id": 1}).to_list(10000)
+    return set(r["product_id"] for r in rows)
+
+
+def _available(p: dict, enabled_ids) -> bool:
+    if enabled_ids is not None and p["id"] not in enabled_ids:
+        return False
+    return bool(p.get("in_stock"))
+
+
+async def _alternatives(product: dict, location_id, pincode, enabled_ids, limit: int = 8):
+    """Available replacements by priority: sub-subcategory -> subcategory -> category (excludes self)."""
+    seen = {product["id"]}
+    picked = []
+
+    async def gather(field):
+        val = product.get(field)
+        if not val:
+            return
+        docs = await db.products.find(
+            {field: val, "is_active": True, "id": {"$nin": list(seen)}}, {"_id": 0}).to_list(80)
+        for ap in docs:
+            if len(picked) >= limit:
+                break
+            e = await enrich(ap, location_id, pincode)
+            if e["id"] in seen or not _available(e, enabled_ids):
+                continue
+            e["match_level"] = field
+            picked.append(e)
+            seen.add(e["id"])
+
+    for f in ("subsubcategory_id", "subcategory_id", "category_id"):
+        if len(picked) < limit:
+            await gather(f)
+    return picked[:limit]
+
+
+@router.get("/products/search-resolve")
+async def search_resolve(q: str, location_id: Optional[str] = None, pincode: Optional[str] = None):
+    """Exact search with availability awareness: distinguishes not-found vs out-of-stock and
+    returns available alternatives (sub-subcategory -> subcategory -> category priority)."""
+    q = (q or "").strip()
+    if not q:
+        return {"query": q, "status": "not_found", "products": [], "unavailable": None,
+                "alternatives": [], "message": "Type something to search."}
+    brand_ids = [b["id"] for b in await db.brands.find(
+        {"name": {"$regex": q, "$options": "i"}}, {"id": 1, "_id": 0}).to_list(200)]
+    ors = [
+        {"name": {"$regex": q, "$options": "i"}},
+        {"sku": {"$regex": q, "$options": "i"}},
+        {"description": {"$regex": q, "$options": "i"}},
+    ]
+    if brand_ids:
+        ors.append({"brand_id": {"$in": brand_ids}})
+    docs = await db.products.find({"is_active": True, "$or": ors}, {"_id": 0}).to_list(1000)
+    enabled_ids = await _pin_enabled_ids(pincode)
+    enriched = [await enrich(d, location_id, pincode) for d in docs]
+    available = [p for p in enriched if _available(p, enabled_ids)]
+    if available:
+        return {"query": q, "status": "available", "products": available, "unavailable": None,
+                "alternatives": [], "message": ""}
+    if not enriched:
+        return {"query": q, "status": "not_found", "products": [], "unavailable": None,
+                "alternatives": [], "message": f'We couldn\'t find any product matching "{q}".'}
+    ql = q.lower()
+    enriched.sort(key=lambda p: 0 if ql in (p.get("name", "") or "").lower() else 1)
+    unavailable = enriched[0]
+    alts = await _alternatives(unavailable, location_id, pincode, enabled_ids)
+    if alts:
+        msg = f'"{unavailable["name"]}" is currently out of stock. Here are available alternatives:'
+    else:
+        msg = (f'"{unavailable["name"]}" is currently out of stock, and we couldn\'t find any '
+               f'available alternatives right now.')
+    return {"query": q, "status": "out_of_stock", "products": [], "unavailable": unavailable,
+            "alternatives": alts, "message": msg}
+
+
 @router.get("/products/{product_id}")
 async def get_product(product_id: str, location_id: Optional[str] = None, pincode: Optional[str] = None):
     doc = await db.products.find_one({"id": product_id}, {"_id": 0})
@@ -102,6 +203,7 @@ async def admin_list_products(admin: dict = Depends(require_admin)):
 @router.post("/admin/products")
 async def create_product(payload: ProductInput, admin: dict = Depends(require_admin)):
     doc = payload.model_dump()
+    await _validate_hierarchy(doc["category_id"], doc.get("subcategory_id"), doc.get("subsubcategory_id"))
     pid = gen_id()
     doc.update({"id": pid, "created_at": now_iso(), "updated_at": now_iso()})
     await db.products.insert_one(doc)
@@ -120,6 +222,7 @@ async def create_product(payload: ProductInput, admin: dict = Depends(require_ad
 @router.put("/admin/products/{product_id}")
 async def update_product(product_id: str, payload: ProductInput, admin: dict = Depends(require_admin)):
     data = payload.model_dump()
+    await _validate_hierarchy(data["category_id"], data.get("subcategory_id"), data.get("subsubcategory_id"))
     data["updated_at"] = now_iso()
     res = await db.products.update_one({"id": product_id}, {"$set": data})
     if res.matched_count == 0:

@@ -43,7 +43,7 @@ async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str,
     if not cfg["swap_allowed"]:
         return []
     swaps = pkg.get("swap_options", {}) or {}
-    sub, cat = orig.get("subcategory_id"), orig.get("category_id")
+    subsub, sub, cat = orig.get("subsubcategory_id"), orig.get("subcategory_id"), orig.get("category_id")
     seen = {pid}
     picked = []  # (product_doc, source)
     for aid in (swaps.get(pid) or []):
@@ -60,6 +60,8 @@ async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str,
                 continue
             picked.append((ap, "suggested")); seen.add(ap["id"])
 
+    if subsub and len(picked) < limit:
+        await _gather({"subsubcategory_id": subsub})
     if sub and len(picked) < limit:
         await _gather({"subcategory_id": sub})
     if cat and len(picked) < limit:
@@ -71,10 +73,12 @@ async def _combo_alternatives(pkg: dict, pid: str, orig: dict, location_id: str,
             "id": ap["id"], "name": ap["name"], "pack_size": ap.get("pack_size", ""),
             "images": ap.get("images", []), "selling_price": ap.get("selling_price", 0),
             "mrp": ap.get("mrp", 0), "subcategory_id": ap.get("subcategory_id"),
+            "subsubcategory_id": ap.get("subsubcategory_id"),
             "category_id": ap.get("category_id"), "stock": await _stock_at(ap["id"], location_id, pincode),
-            "source": source, "recommended": ap.get("subcategory_id") == sub,
+            "source": source, "recommended": (subsub and ap.get("subsubcategory_id") == subsub) or ap.get("subcategory_id") == sub,
         })
-    out.sort(key=lambda a: (0 if a["recommended"] else (1 if a.get("category_id") == cat else 2),
+    out.sort(key=lambda a: (0 if (subsub and a.get("subsubcategory_id") == subsub) else
+                            (1 if a.get("subcategory_id") == sub else (2 if a.get("category_id") == cat else 3)),
                             0 if a["source"] == "admin" else 1, a.get("selling_price", 0)))
     return out[:limit]
 
@@ -99,7 +103,8 @@ async def price_and_validate_combo(pkg: dict, selections: dict, location_id: str
             raise HTTPException(status_code=400, detail="A combo item is no longer available")
         if chosen_id != pid:
             approved = swaps.get(pid) or []
-            same_group = ((chosen.get("subcategory_id") and chosen.get("subcategory_id") == orig.get("subcategory_id"))
+            same_group = ((chosen.get("subsubcategory_id") and chosen.get("subsubcategory_id") == orig.get("subsubcategory_id"))
+                          or (chosen.get("subcategory_id") and chosen.get("subcategory_id") == orig.get("subcategory_id"))
                           or (chosen.get("category_id") and chosen.get("category_id") == orig.get("category_id")))
             if not cfg["swap_allowed"] or (chosen_id not in approved and not same_group):
                 raise HTTPException(status_code=400, detail="Selected replacement is not allowed for this combo")

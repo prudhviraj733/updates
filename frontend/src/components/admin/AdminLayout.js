@@ -16,11 +16,12 @@ const NAV = [
   { icon: BarChart3, label: "Analytics", to: "/admin/analytics", match: ["/admin/analytics"] },
   {
     icon: Package, label: "Products", to: "/admin/products",
-    match: ["/admin/products", "/admin/categories", "/admin/subcategories", "/admin/brands"],
+    match: ["/admin/products", "/admin/categories", "/admin/subcategories", "/admin/subsubcategories", "/admin/brands"],
     children: [
       { to: "/admin/products", label: "Catalog" },
       { to: "/admin/categories", label: "Categories" },
       { to: "/admin/subcategories", label: "Subcategories" },
+      { to: "/admin/subsubcategories", label: "Sub-subcategories" },
       { to: "/admin/brands", label: "Brands" },
     ],
   },

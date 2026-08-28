@@ -210,6 +210,7 @@ class ProductInput(BaseModel):
     description: Optional[str] = ""
     category_id: str
     subcategory_id: Optional[str] = None
+    subsubcategory_id: Optional[str] = None
     brand_id: Optional[str] = None
     images: List[str] = []
     pack_size: str = ""

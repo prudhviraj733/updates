@@ -29,19 +29,55 @@ async def list_categories():
     return _dedupe_by_name(docs)
 
 
+async def _top_category_ids():
+    docs = await db.categories.find({"parent_id": None}, {"_id": 0, "id": 1}).to_list(2000)
+    return [d["id"] for d in docs]
+
+
+async def _subcategory_ids():
+    top = await _top_category_ids()
+    docs = await db.categories.find({"parent_id": {"$in": top}}, {"_id": 0, "id": 1}).to_list(5000)
+    return [d["id"] for d in docs]
+
+
 @router.get("/subcategories")
 async def list_subcategories(category_id: str = None):
-    query = {"is_active": True, "parent_id": {"$ne": None}}
+    top = await _top_category_ids()
+    if category_id is not None and category_id not in top:
+        return []
+    query = {"is_active": True, "parent_id": {"$in": top}}
     if category_id:
         query["parent_id"] = category_id
-    docs = await db.categories.find(query, {"_id": 0}).to_list(1000)
+    docs = await db.categories.find(query, {"_id": 0}).to_list(2000)
+    docs.sort(key=lambda d: d.get("display_order", 0))
+    return _dedupe_by_name(docs)
+
+
+@router.get("/subsubcategories")
+async def list_subsubcategories(subcategory_id: str = None):
+    sub_ids = await _subcategory_ids()
+    if subcategory_id is not None and subcategory_id not in sub_ids:
+        return []
+    query = {"is_active": True, "parent_id": {"$in": sub_ids}}
+    if subcategory_id:
+        query["parent_id"] = subcategory_id
+    docs = await db.categories.find(query, {"_id": 0}).to_list(5000)
     docs.sort(key=lambda d: d.get("display_order", 0))
     return _dedupe_by_name(docs)
 
 
 @router.get("/admin/subcategories")
 async def admin_list_subcategories(admin: dict = Depends(require_admin)):
-    docs = await db.categories.find({"parent_id": {"$ne": None}}, {"_id": 0}).to_list(2000)
+    top = await _top_category_ids()
+    docs = await db.categories.find({"parent_id": {"$in": top}}, {"_id": 0}).to_list(5000)
+    docs.sort(key=lambda d: d.get("display_order", 0))
+    return docs
+
+
+@router.get("/admin/subsubcategories")
+async def admin_list_subsubcategories(admin: dict = Depends(require_admin)):
+    sub_ids = await _subcategory_ids()
+    docs = await db.categories.find({"parent_id": {"$in": sub_ids}}, {"_id": 0}).to_list(5000)
     docs.sort(key=lambda d: d.get("display_order", 0))
     return docs
 
@@ -62,7 +98,12 @@ async def create_category(payload: CategoryInput, admin: dict = Depends(require_
         "parent_id": doc.get("parent_id"),
     })
     if dup:
-        label = "Subcategory" if doc.get("parent_id") else "Category"
+        pid = doc.get("parent_id")
+        if not pid:
+            label = "Category"
+        else:
+            parent = await db.categories.find_one({"id": pid}, {"_id": 0, "parent_id": 1})
+            label = "Subcategory" if (parent and parent.get("parent_id") is None) else "Sub-subcategory"
         raise HTTPException(status_code=400, detail=f"{label} '{name}' already exists here")
     doc.update({"id": gen_id(), "created_at": now_iso(), "updated_at": now_iso()})
     await db.categories.insert_one(doc)
