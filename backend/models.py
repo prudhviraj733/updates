@@ -247,6 +247,16 @@ class CopyInventoryInput(BaseModel):
     to_pincodes: List[str] = []
 
 
+class InventoryBatchInput(BaseModel):
+    product_id: str
+    location_id: Optional[str] = None
+    pincode: Optional[str] = None
+    batch_number: str
+    quantity: int
+    expiry_date: Optional[str] = None
+    low_stock_threshold: Optional[int] = None
+
+
 # ---------- Cart ----------
 class CartItemInput(BaseModel):
     product_id: str

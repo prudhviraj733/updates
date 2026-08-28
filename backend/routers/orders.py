@@ -93,8 +93,42 @@ async def _inv_filter(product_id, pincode, location_id):
     return {"product_id": product_id, "location_id": location_id}
 
 
+async def _consume_batches_fefo(base, qty):
+    """First-Expiry-First-Out batch consumption. available_quantity is the authoritative gate;
+    this distributes the deduction across specific batches. Returns allocations actually taken."""
+    row = await db.inventory.find_one(base, {"_id": 0, "batches": 1})
+    batches = [b for b in (row.get("batches") or []) if (b.get("quantity", 0) or 0) > 0] if row else []
+    batches.sort(key=lambda b: (b.get("expiry_date") is None, str(b.get("expiry_date") or "9999-12-31")))
+    allocations = []
+    remaining = qty
+    for b in batches:
+        if remaining <= 0:
+            break
+        take = min(int(b["quantity"]), remaining)
+        res = await db.inventory.update_one(
+            {**base, "batches.id": b["id"], "batches.quantity": {"$gte": take}},
+            {"$inc": {"batches.$.quantity": -take}})
+        if res.modified_count:
+            allocations.append({"batch_id": b["id"], "batch_number": b.get("batch_number"),
+                                "expiry_date": b.get("expiry_date"), "quantity": take})
+            remaining -= take
+    await db.inventory.update_one(base, {"$pull": {"batches": {"quantity": {"$lte": 0}}}})
+    return allocations
+
+
+async def _restore_batches(base, allocs):
+    for a in allocs:
+        res = await db.inventory.update_one(
+            {**base, "batches.id": a["batch_id"]}, {"$inc": {"batches.$.quantity": a["quantity"]}})
+        if not res.modified_count:
+            await db.inventory.update_one(base, {"$push": {"batches": {
+                "id": a["batch_id"], "batch_number": a.get("batch_number"),
+                "expiry_date": a.get("expiry_date"), "quantity": a["quantity"], "added_at": now_iso()}}})
+
+
 async def _reserve_inventory(items, location_id, pincode=None):
-    reserved = []
+    done = []  # (base, item, allocs)
+    allocations = []
     for it in items:
         base = await _inv_filter(it["product_id"], pincode, location_id)
         res = await db.inventory.find_one_and_update(
@@ -102,12 +136,15 @@ async def _reserve_inventory(items, location_id, pincode=None):
             {"$inc": {"available_quantity": -it["quantity"], "reserved_quantity": it["quantity"]}},
         )
         if not res:
-            for r in reserved:
-                rb = await _inv_filter(r["product_id"], pincode, location_id)
+            for b, r, al in done:
                 await db.inventory.update_one(
-                    rb, {"$inc": {"available_quantity": r["quantity"], "reserved_quantity": -r["quantity"]}})
+                    b, {"$inc": {"available_quantity": r["quantity"], "reserved_quantity": -r["quantity"]}})
+                await _restore_batches(b, al)
             raise HTTPException(status_code=409, detail=f"{it['name']} is out of stock")
-        reserved.append(it)
+        allocs = await _consume_batches_fefo(base, it["quantity"])
+        done.append((base, it, allocs))
+        allocations.extend([{**a, "product_id": it["product_id"]} for a in allocs])
+    return allocations
 
 
 @router.post("/orders")
@@ -327,8 +364,8 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         wallet_used = round(min(bal, final_amount), 2)
         final_amount = round(final_amount - wallet_used, 2)
 
-    # Reserve inventory atomically (per-PIN when configured)
-    await _reserve_inventory(items, payload.location_id, pin.get("pincode"))
+    # Reserve inventory atomically (per-PIN when configured); FEFO batch allocation
+    batch_allocations = await _reserve_inventory(items, payload.location_id, pin.get("pincode"))
 
     payment_status = "pending"
     order = {
@@ -344,6 +381,7 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         "address": address,
         "platform": client_platform(request),
         "items": items,
+        "batch_allocations": batch_allocations,
         "subtotal": round(subtotal, 2),
         "product_discount": product_discount,
         "combo_discount": combo_discount,
@@ -486,6 +524,8 @@ async def _apply_inventory_transition(order, new_status):
             await db.inventory.update_one(
                 await filt(it["product_id"]),
                 {"$inc": {"available_quantity": it["quantity"], "reserved_quantity": -it["quantity"]}})
+        for a in (order.get("batch_allocations") or []):
+            await _restore_batches(await filt(a["product_id"]), [a])
     elif new_status == "delivered" and order["status"] != "delivered":
         for it in order["items"]:
             await db.inventory.update_one(

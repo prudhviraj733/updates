@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 26: full backend + admin UI verification of batch-level inventory, expiry indicators, low-stock/out-of-stock, dashboard summary cards, TRUE FEFO deduction on real orders with restore-on-cancel, and legacy (no-batch) compatibility. New pytest suite /app/backend/tests/test_inventory_batch_iter26.py (19 tests, 19/19 passed) covers: batch endpoint auth (401) + validation (qty<=0, blank batch number, missing pincode/location, delete unknown batch 404); multiple batches stay separate and sum into available_quantity; per-batch expiry status/days (very_soon=5d, soon=18d, normal=400d, expired=-3d) and row nearest-expiry summary; expiry-summary buckets (expired>=1, expiring_30>=expiring_7); low_stock_threshold persistence + low/out flags; delete batch reduces available by exactly that batch qty; FEFO end-to-end (seeded 2 batches: qty2 @ +5d and qty20 @ +400d, real customer order of 3 via cart -> slot checkout -> allocations = {FE1:2, FE2:1}, earliest batch depleted/removed, later batch 20->19, available -3, reserved +3; admin cancel restored available, reserved AND both batch quantities with their original expiry dates); oversell gate; legacy no-batch row absolute Save + order/cancel cycle (25->23->25, no batch_allocations); PIN inventory regression (listing shape without _id, enable/disable toggle, enable-all, /admin/inventory/summary). Admin UI /admin/inventory verified end-to-end: 6 summary cards render and clicking sets the matching status filter, + Batch dialog adds batches (persisted, panel shows batch number/qty/expiry/status per batch), row expiry badge shows nearest bucket + 'Expires in 4 days', search matches batch numbers, sort by nearest expiry/lowest stock works, threshold save persists and flips badge to 'Low', 0 available shows 'Out', delete batch reduces available, enable/disable toggle + Enable All (this PIN, 28 rows) + Copy controls work. Storefront regression: add-to-cart, cart drawer, remove, checkout button all OK. Auth playbook re-checked: bcrypt $2b$12$, httpOnly+Secure cookies on login, allow_credentials with explicit origins from env, per-account lockout on the 5th failed attempt (429, 15 min), seed_admin updates existing admin hash when ADMIN_PASSWORD changes. All test data cleaned up (test batches deleted, 4 test orders cancelled then removed, probe login_attempts purged, Almonds row restored to 55/threshold 5/0 batches, customer cart emptied).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/inventory/expiry-summary", "issue": "Counts every inventory row for the PIN, including rows whose product is inactive/deleted, while GET /admin/inventory only lists active products. For PIN 520003: summary total=56 but table shows 28 rows; all 11 'Out of stock' counted rows belong to inactive products, so clicking the 'Out of stock' card renders an EMPTY table (card says 11, rows 0). Filter rows by is_active product ids exactly like list_inventory does."},
+      {"endpoint": "PUT /api/admin/inventory", "issue": "The absolute available_quantity Save does not reconcile with batch quantities, so available can desync from the batch ledger. Reproduced in UI: set available=0 while two batches still held 12 units (row shows 'Out' but batches total 12); conversely setting available higher than the batch sum lets FEFO allocate less than the ordered qty (available -N but batches only -sum), leaving permanent drift. Recommend recomputing available from the batch sum for batched rows, or blocking/warning on absolute save when batches exist."},
+      {"endpoint": "DELETE /api/admin/inventory/batch/{id}", "issue": "Decrement is clamped with min(batch_qty, available_quantity); when available is already lower than the batch qty (e.g. after a manual absolute Save) the batch is removed but stock is only partially reduced — silently hides the drift above instead of surfacing it."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminInventory row inputs", "issue": "HIGH: Available and Low-threshold cells use uncontrolled <Input defaultValue={...}>, so they never refresh after load(pincode). After adding a batch of 7 the Batches count and expiry badge updated but Available still showed 55 while the backend was 62 (verified via API); same after deleting a batch. If the admin then clicks Save, the stale total is written back and the batch-added quantity is wiped. Use a controlled value (edits[pid] ?? it.available_quantity) or key the input by the loaded value.", "selector": "[data-testid=\"stock-input-{product_id}\"], [data-testid=\"threshold-input-{product_id}\"]", "priority": "HIGH"},
+      {"component": "AdminInventory table", "issue": "React console error 'Each child in a list should have a unique key prop' — filtered.map returns a bare <> fragment wrapping the row + batches panel; the key is on the inner <tr> instead of the fragment. Use <Fragment key={it.product_id}>.", "selector": "[data-testid^=\"inventory-row-\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Dashboard summary card -> list filter", "issue": "Clicking 'Out of stock' (card value 11) filters the table to 0 rows because the summary endpoint counts inactive-product inventory rows that the table never lists; 'Total inventory' shows 56 vs 28 listed products. Card counts must be computed over the same active-product set as the table.", "affected_selectors": ["[data-testid=\"summary-out\"]", "[data-testid=\"summary-all\"]", "[data-testid=\"inventory-status-filter\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Admin inventory batch dialog", "issues": ["Expiry date uses the native browser <input type=\"date\"> picker instead of the shadcn calendar component used elsewhere", "No inline field-level validation hints; errors only appear as toasts"]},
+      {"screen": "Admin inventory table", "issues": ["Low-stock badge uses a red circle emoji on an amber badge (🔴 Low on bg-amber-100) — emoji and badge colour disagree; spec colours would read better as amber 🟡/red text consistency"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_inventory_batch_iter26.py",
+    "/app/test_reports/pytest/iter26_inventory.xml",
+    "/app/backend/tests/test_inventory_batch.py"
+  ],
+  "action_items": [
+    "FIX (HIGH): make Available/Low-threshold inputs controlled in AdminInventory so they refresh after batch add/delete — currently a stale Save overwrites the batch-added stock.",
+    "FIX: expiry-summary must only count inventory rows for active products (otherwise cards over-count and the 'Out of stock' card filters to an empty table).",
+    "FIX: reconcile absolute available_quantity Save with batch quantities (recompute from batch sum, or disallow/warn for batched rows) to prevent available vs batch-ledger drift.",
+    "FIX (minor): add key to the fragment in AdminInventory filtered.map to clear the React key console error.",
+    "Optional: use the shadcn calendar for the batch expiry field instead of the native date picker."
+  ],
+  "critical_code_review_comments": [
+    "FEFO implementation is correct and race-safe: the atomic available_quantity>=qty gate runs before batch decrements, per-batch decrements use a batches.quantity>=take guard, depleted batches are pulled, and cancel restores both available and the exact allocations (re-pushing the batch with its original expiry if it was pulled) — verified against real orders.",
+    "list_inventory does one db.inventory.find_one per active product (N+1); with 28 products it is fine but a single $in query keyed by product_id would scale better.",
+    "expiry_summary and list_inventory duplicate the enabled/low/out/expiry bucketing logic with different row sets — extract one helper so the cards and the table can never disagree.",
+    "add_batch accepts any expiry_date the model allows and _expiry_status silently swallows unparsable values as status 'none'; consider validating/normalising to date in the Pydantic model instead."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_inventory_batch_iter26.py (new)"
+  ],
+  "success_rate": {"backend": "100% (19/19 pytest; 3 minor consistency defects reported)", "frontend": "90% — all batch/expiry/filter/sort/threshold flows work; stale Available input + summary-card/table count mismatch are the failures"},
+  "seed_data_creation": "Temporary only: batches prefixed T26*/UI26* on 3 products in PIN 520003 (all deleted), 4 COD orders placed through the real cart/checkout for FEFO + legacy verification (cancelled and then deleted from db.orders), login_attempts probe row for bf_probe_iter26@example.com (deleted), Almonds (Badam) PIN 520003 row restored to available=55, threshold=5, 0 batches, enabled=true. Customer cart emptied.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345 and customer customer@test.com / Test@12345 (from /app/memory/test_credentials.md) both work.",
+  "context_for_next_testing_agent": "Run `pytest tests/test_inventory_batch_iter26.py` from /app/backend (it is self-cleaning; test orders remain as cancelled rows and can be deleted by order_number). The suite picks the first serviceable PIN matching a customer address (currently 520003 / location Gandhinagar) and uses 3 distinct products so xdist loadscope classes don't collide — keep p_batch/p_legacy/p_fefo separate if you extend it. Checkout requires delivery_type='standard' plus a slot_id from /api/delivery/slots/range (delivery_type='asap' is rejected with 'Please select a delivery slot'). PIN 520003 has 56 inventory rows but only 28 active products — that mismatch drives the summary-card bug; re-verify card counts equal table rows after the fix. The Available input is uncontrolled, so after any batch mutation reload /admin/inventory before reading it.",
+  "rca_of_the_issue": "Stale Available column: AdminInventory renders <Input defaultValue={it.available_quantity}> — React keeps the first-mounted DOM value across re-renders, so load(pincode) after addBatch/delBatch updates batch count and badges but not the number input; a subsequent Save posts the stale value. Summary/table mismatch: routers/inventory.py expiry_summary queries db.inventory by pincode only, while list_inventory iterates db.products(is_active=True); PIN 520003 holds 28 orphan rows for inactive products (all 11 out-of-stock rows are orphans), so the cards count rows the table can never show."
+}
