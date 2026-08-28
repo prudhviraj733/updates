@@ -1,3 +1,11 @@
+## 2026-08-28 — Mobile SMS OTP verification (mobile app parity; web + backend already existed)
+- **No auth rebuild**: uses existing authenticated endpoints `/api/auth/phone/send-otp` + `/api/auth/phone/verify-otp` and existing Twilio Verify config (env-only creds). Backend was already complete (Indian-number normalize/validate, hashed local-dev fallback, Twilio Verify mode, 5-min TTL, 30s resend cooldown, max 5 sends/hr, max 5 verify attempts, server-authoritative `phone_verified`). No backend code changed.
+- **Web**: already implemented in `pages/store/Account.js` (send/verify/resend-cooldown/error handling, verified badge) — verified working; registration (`Auth.js`) already collects + requires phone.
+- **Mobile (new)**: `mobile/src/screens/AccountScreen.js` now has the full flow — +91 input with 10-digit `[6-9]` validation, "Verify Mobile Number" → OTP entry → "Confirm OTP", Resend with 30s cooldown, Cancel, `already_verified` handling, and "Mobile Number Verified ✓" state. Uses `AuthContext.refreshUser()` so verified status is server-authoritative.
+- **Twilio limitation (unchanged)**: +91 sends currently return HTTP 503 (`OTP service temporarily unavailable`) because Trust Hub Primary Customer Profile for India is not yet approved. Verified via curl: invalid number→400, no-request verify→400, already-verified→200 skip, real +91 send→503 handled gracefully without breaking registration/login. OTP is never faked, never hard-coded, never exposed (dev_otp only surfaces when Twilio is entirely unconfigured in local dev). Full real-SMS test pending Trust Hub +91 approval.
+- **Mobile note**: implemented at source level; not device/AAB-tested in this environment.
+
+
 ## 2026-08-28 — Coupon PUBLIC/PRIVATE visibility + detailed analytics
 - **No rebuild / no migration**: extends existing coupon system. Existing coupons default to **PUBLIC** (missing `visibility` treated as public). Private = hidden from the public list, NOT invalid.
 - **Data**: `CouponInput`/`BulkCouponInput` gain `visibility` ("public"|"private"). New `coupon_events` collection (funnel: `view` + `apply` events; views de-duplicated per customer/coupon/day via upsert). Indexes added on `coupon_events (code,created_at)` and `(code,user_id,type,day)`. Redemptions/revenue/discount stay **authoritative from `db.orders`** (never frontend counters).
