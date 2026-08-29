@@ -264,6 +264,7 @@ async def add_batch(payload: InventoryBatchInput, admin: dict = Depends(require_
         raise HTTPException(status_code=400, detail="Batch number is required")
     key, loc_id = await _batch_key(payload.product_id, payload.pincode, payload.location_id)
     batch = {"id": gen_id(), "batch_number": payload.batch_number.strip(), "quantity": int(payload.quantity),
+             "purchase_price": (round(float(payload.purchase_price), 2) if payload.purchase_price is not None else None),
              "expiry_date": str(payload.expiry_date)[:10] if payload.expiry_date else None, "added_at": now_iso()}
     existing = await db.inventory.find_one(key)
     if existing:
@@ -274,7 +275,7 @@ async def add_batch(payload: InventoryBatchInput, admin: dict = Depends(require_
         if legacy_remainder > 0:
             # Fold pre-existing non-batch stock into a LEGACY batch so batches == available_quantity
             push = [{"id": gen_id(), "batch_number": "LEGACY", "quantity": legacy_remainder,
-                     "expiry_date": None, "added_at": now_iso()}, batch]
+                     "expiry_date": None, "purchase_price": None, "added_at": now_iso()}, batch]
         upd = {"$push": {"batches": {"$each": push}}, "$inc": {"available_quantity": int(payload.quantity)},
                "$set": {"updated_at": now_iso()}}
         if payload.low_stock_threshold is not None:

@@ -55,7 +55,7 @@ export default function AdminInventory() {
   const [bulkStock, setBulkStock] = useState("");
   const [copyTo, setCopyTo] = useState("");
   const [batchFor, setBatchFor] = useState(null);
-  const [batchForm, setBatchForm] = useState({ batch_number: "", quantity: "", expiry_date: "" });
+  const [batchForm, setBatchForm] = useState({ batch_number: "", quantity: "", purchase_price: "", expiry_date: "" });
 
   useEffect(() => {
     api.get("/admin/pincodes").then(({ data }) => {
@@ -98,9 +98,10 @@ export default function AdminInventory() {
       await api.post("/admin/inventory/batch", {
         product_id: batchFor.product_id, pincode,
         batch_number: batchForm.batch_number.trim(), quantity: Number(batchForm.quantity),
+        purchase_price: batchForm.purchase_price === "" ? null : Number(batchForm.purchase_price),
         expiry_date: batchForm.expiry_date || null,
       });
-      toast.success("Batch added"); setBatchFor(null); setBatchForm({ batch_number: "", quantity: "", expiry_date: "" });
+      toast.success("Batch added"); setBatchFor(null); setBatchForm({ batch_number: "", quantity: "", purchase_price: "", expiry_date: "" });
       load(pincode); loadSummary(pincode);
     } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
   };
@@ -253,7 +254,7 @@ export default function AdminInventory() {
                     <td className="px-4 py-2" data-testid={`stock-status-${it.product_id}`}>{!it.enabled ? <Badge variant="secondary">Disabled</Badge> : it.out_of_stock ? <Badge className="bg-slate-800 text-white">⚫ Out of Stock</Badge> : it.low_stock ? <Badge className="bg-red-100 text-red-700">🔴 Low Stock</Badge> : <Badge className="bg-forest-light text-forest">🟢 In Stock</Badge>}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       <Button size="sm" className="h-8 bg-forest hover:bg-forest-dark" onClick={() => save(it)} data-testid={`save-stock-${it.product_id}`}>Save</Button>
-                      <Button size="sm" variant="outline" className="ml-2 h-8" onClick={() => { setBatchFor(it); setBatchForm({ batch_number: "", quantity: "", expiry_date: "" }); }} data-testid={`add-batch-${it.product_id}`}><Plus className="mr-1 h-3 w-3" />Batch</Button>
+                      <Button size="sm" variant="outline" className="ml-2 h-8" onClick={() => { setBatchFor(it); setBatchForm({ batch_number: "", quantity: "", purchase_price: "", expiry_date: "" }); }} data-testid={`add-batch-${it.product_id}`}><Plus className="mr-1 h-3 w-3" />Batch</Button>
                     </td>
                   </tr>
                   {isOpen && (
@@ -263,12 +264,13 @@ export default function AdminInventory() {
                           <p className="text-xs text-slate-400">No batches. Legacy stock or use "+ Batch" to add one.</p>
                         ) : (
                           <table className="w-full text-xs">
-                            <thead className="text-slate-400"><tr><th className="py-1 text-left">Batch number</th><th className="py-1 text-left">Quantity</th><th className="py-1 text-left">Expiry date</th><th className="py-1 text-left">Status</th><th></th></tr></thead>
+                            <thead className="text-slate-400"><tr><th className="py-1 text-left">Batch number</th><th className="py-1 text-left">Quantity</th><th className="py-1 text-left">Purchase ₹/unit</th><th className="py-1 text-left">Expiry date</th><th className="py-1 text-left">Status</th><th></th></tr></thead>
                             <tbody>
                               {it.batches.map((b) => (
                                 <tr key={b.id} data-testid={`batch-${b.id}`}>
                                   <td className="py-1 font-mono">{b.batch_number}</td>
                                   <td className="py-1">{b.quantity}</td>
+                                  <td className="py-1">{b.purchase_price != null ? `₹${b.purchase_price}` : "—"}</td>
                                   <td className="py-1">{b.expiry_date || "—"}</td>
                                   <td className="py-1"><span className="text-slate-500">{(EXP[b.expiry?.status] || EXP.none).label} · {daysText(b.expiry)}</span></td>
                                   <td className="py-1 text-right"><button onClick={() => delBatch(it, b)} data-testid={`del-batch-${b.id}`}><Trash2 className="h-3.5 w-3.5 text-slate-400 hover:text-red-600" /></button></td>
@@ -297,6 +299,7 @@ export default function AdminInventory() {
           <div className="grid gap-3">
             <div><Label>Batch number</Label><Input value={batchForm.batch_number} onChange={(e) => setBatchForm({ ...batchForm, batch_number: e.target.value })} placeholder="e.g. BR24001" data-testid="batch-number-input" /></div>
             <div><Label>Quantity</Label><Input type="number" value={batchForm.quantity} onChange={(e) => setBatchForm({ ...batchForm, quantity: e.target.value })} placeholder="e.g. 50" data-testid="batch-quantity-input" /></div>
+            <div><Label>Purchase price / unit (optional)</Label><Input type="number" value={batchForm.purchase_price} onChange={(e) => setBatchForm({ ...batchForm, purchase_price: e.target.value })} placeholder="e.g. 500" data-testid="batch-purchase-price-input" /></div>
             <div><Label>Expiry date</Label><Input type="date" value={batchForm.expiry_date} onChange={(e) => setBatchForm({ ...batchForm, expiry_date: e.target.value })} data-testid="batch-expiry-input" /></div>
           </div>
           <DialogFooter><Button className="bg-forest hover:bg-forest-dark" onClick={addBatch} data-testid="save-batch-btn">Add Batch</Button></DialogFooter>

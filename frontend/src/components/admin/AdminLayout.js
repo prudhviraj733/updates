@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ShoppingBag, BarChart3, Package, Warehouse, Ticket, Users,
-  Truck, Gift, Share2, Wallet, Settings, LogOut, Store, Menu, RotateCcw, Bell,
+  Truck, Gift, Share2, Wallet, Settings, LogOut, Store, Menu, RotateCcw, Bell, TrendingUp,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -14,6 +14,7 @@ const NAV = [
   { icon: RotateCcw, label: "Refunds & Replacements", to: "/admin/returns", match: ["/admin/returns"] },
   { icon: Bell, label: "Notifications", to: "/admin/notifications", match: ["/admin/notifications"] },
   { icon: BarChart3, label: "Analytics", to: "/admin/analytics", match: ["/admin/analytics"] },
+  { icon: TrendingUp, label: "Profit & Margins", to: "/admin/profit", match: ["/admin/profit"] },
   {
     icon: Package, label: "Products", to: "/admin/products",
     match: ["/admin/products", "/admin/categories", "/admin/subcategories", "/admin/subsubcategories", "/admin/brands"],

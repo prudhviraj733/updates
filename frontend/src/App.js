@@ -45,6 +45,7 @@ import AdminCustomerDetail from "@/pages/admin/AdminCustomerDetail";
 import AdminDelivery from "@/pages/admin/AdminDelivery";
 import AdminDeliveryStats from "@/pages/admin/AdminDeliveryStats";
 import AdminAnalytics from "@/pages/admin/AdminAnalytics";
+import AdminProfit from "@/pages/admin/AdminProfit";
 import AdminCoupons from "@/pages/admin/AdminCoupons";
 import AdminCouponStats from "@/pages/admin/AdminCouponStats";
 import AdminPackages from "@/pages/admin/AdminPackages";
@@ -120,6 +121,7 @@ function App() {
                 <Route path="delivery" element={<AdminDelivery />} />
                 <Route path="delivery-stats" element={<AdminDeliveryStats />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
+                <Route path="profit" element={<AdminProfit />} />
                 <Route path="coupons" element={<AdminCoupons />} />
                 <Route path="coupons/:id/stats" element={<AdminCouponStats />} />
                 <Route path="packages" element={<AdminPackages />} />

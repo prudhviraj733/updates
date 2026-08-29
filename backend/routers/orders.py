@@ -395,6 +395,7 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
         "campaign_id": campaign_id,
         "free_delivery_applied": free_delivery_applied,
         "delivery_charge": delivery_charge,
+        "delivery_cost": round(float(pin.get("delivery_cost")), 2) if pin.get("delivery_cost") is not None else 0.0,
         "express_charge": express_charge,
         "final_amount": final_amount,
         "delivery_type": payload.delivery_type,
@@ -432,11 +433,24 @@ async def create_order(payload: OrderInput, request: Request, user: dict = Depen
     return order
 
 
+def _scrub_internal(order: dict) -> dict:
+    """Remove internal cost/profit fields before returning to a customer."""
+    order.pop("delivery_cost", None)
+    order.pop("batch_allocations", None)
+    for it in order.get("items", []) or []:
+        it.pop("cost_price", None)
+    for c in order.get("combos", []) or []:
+        for li in c.get("items", []) or []:
+            li.pop("cost_price", None)
+    return order
+
+
 @router.get("/orders")
 async def list_my_orders(user: dict = Depends(get_current_user)):
     docs = await db.orders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
     for d in docs:
         d["customer_status"] = customer_status(d.get("status"))
+        _scrub_internal(d)
     return docs
 
 
@@ -449,6 +463,8 @@ async def get_order(order_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not allowed")
     order["status_history"] = _dedupe_history(order.get("status_history"))
     order["customer_status"] = customer_status(order.get("status"))
+    if user.get("role") != "admin":
+        _scrub_internal(order)
     return order
 
 

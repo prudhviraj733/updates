@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 28: full backend + frontend verification of the new order-level profit & profit-analytics feature. Created /app/backend/tests/test_profit_iter28.py (46 tests) and test_profit_refund_iter28.py (2 tests): 47 passed, 1 skipped (no refunded orders in DB). Verified per-order profit math against raw order snapshots for all 8 delivered orders + a freshly created synthetic COD order, all 5 named periods + custom range (400 without dates, 400 on bad format, correct label/start/end), summary internal consistency (gross_profit = net_revenue - purchase_cost; net_profit = gross_profit + delivery_collected - delivery_cost - refunds; daily[] sums to realized totals and is date-sorted), cancelled/realized order counts cross-checked against /api/admin/orders, breakdown sorting + qty reconciliation vs realized non-cancelled order items, coupon aggregation reconciled 1:1 with order coupon codes (incl. visibility), inventory valuation totals/sorting + batch purchase_price precedence (10 units @7.5 raised value by exactly 75; delete restored it; older batch price never overwritten; batch without price = null). PUT /admin/orders/{id}/delivery-cost verified on a SYNTHETIC order: 30 reduced net profit by exactly 30, persisted, restored; delivery_charge +25 adjusted final_amount by +25 and was restored; negative cost/charge -> 400; unknown order -> 404. Security: anonymous and customer tokens get 401/403 on all 6 admin profit endpoints; GET /api/orders and /api/orders/{id} contain no delivery_cost / batch_allocations / item.cost_price while admin still sees them. Frontend: /admin/profit loads with all 11 KPI cards, both charts, all 6 period buttons and all 4 tabs (Overview/Products & Categories/Coupon Impact/Inventory Value) rendering data; AdminOrderDetail 'Profit (internal)' card renders full waterfall and the delivery-cost editor saved (1178.48 -> 1153.48 for 25, margin 28.98% -> 28.37%) and restored to 0/40 with toast. All modified real data restored (TEST-RET-ORDER-1: delivery_cost 0, delivery_charge 40, final_amount 4106); synthetic orders cancelled, test batches deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/profit/inventory", "issue": "totals.products counts product-PIN inventory rows, not distinct products (same product appears once per PIN, e.g. 'Almonds (Badam)' x3, 364 'products in stock' for ~a few dozen SKUs). Consider labelling it 'stock rows' or de-duplicating by product_id."},
+      {"endpoint": "GET /api/admin/profit/inventory", "issue": "Mixed-cost fallback assumes priced batches are consumed first: remaining = available - priced_qty valued at product.cost_price. If batch quantities exceed available_quantity (reserved units), priced_val can exceed the true on-hand value. Not reproducible with current data but worth clamping."},
+      {"endpoint": "GET /api/admin/profit/breakdown", "issue": "Per-item revenue/profit uses unit_price (incl. embedded GST when gst.pricing=inclusive) and ignores coupon discounts, so by_product/by_category margins (flat 28%) are not consistent with order-level net margin (25.11%). Acceptable as an analysis view but should be documented in the UI note."},
+      {"endpoint": "PUT /api/admin/orders/{id}/delivery-cost", "issue": "Editing delivery_charge mutates final_amount even for delivered/paid orders without writing an audit trail; payment_status/paid amount is not reconciled. Consider logging the adjustment."},
+      {"endpoint": "GET /api/admin/profit/*", "issue": "Refund-reduction path could not be exercised: no order in the DB has payment_status=refunded / wallet refund ledger entries, so _refunds_by_order() aggregation remains untested end-to-end (test skipped, not failed)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminOrderDetail", "issue": "React DOM-nesting/hydration console error: <Badge> renders a <div> inside the <p> at AdminOrderDetail.js:185 ('Profit (internal)' header). Change the <p> to a <div> or make Badge a span.", "selector": "[data-testid=\"order-profit-card\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "AdminProfit custom period", "issue": "Clicking 'Custom' with empty dates short-circuits load() so the previously fetched period's KPIs stay on screen while the badge still shows the OLD period label - looks like real data for the custom range. Show an empty/prompt state instead.", "affected_selectors": ["[data-testid=\"period-custom\"]", "[data-testid=\"profit-start\"]", "[data-testid=\"kpi-net-profit\"]"]},
+      {"flow": "AdminProfit data load", "issue": "load() uses `catch { /* noop */ }` and the inventory fetch uses .catch(() => {}) - API failures leave stale/blank cards with no error state or retry (violates loading/success/error requirement).", "affected_selectors": ["[data-testid=\"admin-profit\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "/admin/profit", "issues": ["Custom range uses native <input type=\"date\"> (browser default picker) instead of the shadcn calendar/popover used elsewhere - inconsistent with the rest of the admin UI.", "Inventory Value table repeats the same product for every PIN with identical numbers, making it hard to read; consider grouping by product with a PIN column expander."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_profit_iter28.py",
+    "/app/backend/tests/test_profit_refund_iter28.py",
+    "/app/test_reports/pytest/profit_iter28.xml"
+  ],
+  "action_items": [
+    "Fix DOM nesting warning in AdminOrderDetail.js:185 (Badge <div> inside <p>).",
+    "AdminProfit: show an explicit 'pick a date range' empty state when period=custom without dates, and surface API errors instead of silent catch.",
+    "Clarify/label the inventory valuation 'Products in stock' metric (counts product-PIN rows) and consider de-duplicating.",
+    "Optional: align breakdown per-item revenue with ex-GST/coupon-adjusted revenue or add a UI note that product/category margins are gross (pre-coupon, incl. inclusive GST).",
+    "Optional: create one refunded order to validate refund subtraction in summary/coupons aggregates (currently untested)."
+  ],
+  "critical_code_review_comments": [
+    "compute_order_profit uses order.subtotal (post product/combo discount) as the revenue base and only reports gross_product_sales informationally - correct per spec, but gross_sales - product_discount - coupon_discount will not equal net_revenue when order.subtotal is not exactly mrp*qty - product_discount; a defensive assertion/log would catch data drift.",
+    "profit.py is dependency-light and clean (371 lines, no _id leakage, all async, Pydantic-validated input, env-based config) - no structural issues found.",
+    "PUT /admin/pincodes uses payload.model_dump() (full replace), so any client that omits delivery_cost silently nulls it; AdminPinCodes.js does send it, but the endpoint would be safer with exclude_unset."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_profit_iter28.py",
+    "/app/backend/tests/test_profit_refund_iter28.py"
+  ],
+  "success_rate": {"backend": "100% (47 passed, 1 skipped of 48)", "frontend": "100% of tested flows (profit dashboard, 6 periods, 4 tabs, order profit card + delivery cost save/restore)"},
+  "seed_data_creation": "Created 1 synthetic COD order per pytest run (cancelled in teardown) and temporary inventory batches T28*PP/KEEP/NULL (all deleted). Real order TEST-RET-ORDER-1 restored to delivery_cost=0, delivery_charge=40, final_amount=4106.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin prudhvirajm847@gmail.com / Admin@12345 (login returns user object at top level, not nested under 'user'); Customer customer@test.com / Test@12345",
+  "context_for_next_testing_agent": "Profit feature is fully green. Reusable suite: /app/backend/tests/test_profit_iter28.py (module-scoped admin/customer sessions, creates+cancels its own order, self-cleans batches, restores PIN delivery_cost). pytest.ini forces xdist loadscope so module state stays on one worker. Refund-reduction path is the only untested branch (no refunded orders in DB). Login response shape: {id,name,email,role,...} at top level. Admin orders list has no <a href> links - navigate directly to /admin/orders/{order_id}.",
+  "rca_of_the_issue": "No functional defect found. The only initial test failure was my own assertion that every PIN document contains a delivery_cost key: legacy PIN docs predate the field, and orders.py already coerces a missing/None pin.delivery_cost to 0.0, so behaviour is correct; the test was rewritten as a PUT round-trip and passes."
+}

@@ -18,13 +18,28 @@ export default function AdminOrderDetail() {
   const [order, setOrder] = useState(null);
   const [tracking, setTracking] = useState("");
   const [provider, setProvider] = useState("rapido");
+  const [profit, setProfit] = useState(null);
+  const [delCost, setDelCost] = useState("");
+  const [delCharge, setDelCharge] = useState("");
 
-  const load = () => api.get(`/orders/${id}`).then(({ data }) => { setOrder(data); setTracking(data.tracking_url || ""); setProvider(data.tracking_provider || "rapido"); });
+  const load = () => {
+    api.get(`/orders/${id}`).then(({ data }) => { setOrder(data); setTracking(data.tracking_url || ""); setProvider(data.tracking_provider || "rapido"); setDelCost(data.delivery_cost ?? ""); setDelCharge(data.delivery_charge ?? ""); });
+    api.get(`/admin/orders/${id}/profit`).then(({ data }) => setProfit(data)).catch(() => {});
+  };
   useEffect(() => { load(); }, [id]);
 
   const accept = async () => { try { await api.put(`/admin/orders/${id}/accept`); toast.success("Order accepted"); load(); } catch (e) { toast.error(e.response?.data?.detail || "Error"); } };
   const setStatus = async (s) => { try { await api.put(`/admin/orders/${id}/status`, { status: s }); toast.success("Status updated"); load(); } catch (e) { toast.error(e.response?.data?.detail || "Error"); } };
   const saveTracking = async () => { try { await api.put(`/admin/orders/${id}/tracking`, { tracking_url: tracking, tracking_provider: provider }); toast.success("Tracking link saved"); load(); } catch (e) { toast.error(e.response?.data?.detail || "Error"); } };
+  const saveDelivery = async () => {
+    try {
+      await api.put(`/admin/orders/${id}/delivery-cost`, {
+        delivery_cost: delCost === "" ? null : Number(delCost),
+        delivery_charge: delCharge === "" ? null : Number(delCharge),
+      });
+      toast.success("Delivery cost saved"); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Error"); }
+  };
 
   if (!order) return <div className="p-6 text-slate-400">Loading…</div>;
 
@@ -164,6 +179,35 @@ export default function AdminOrderDetail() {
             {order.product_discount > 0 && <p className="mt-1 text-xs text-forest" data-testid="order-mrp-savings">You saved {inr(order.product_discount)} off MRP</p>}
             <p className="mt-2 text-xs text-slate-400" data-testid="order-payment-meta">{order.payment_method?.toUpperCase()} · {order.payment_status}</p>
           </div>
+
+          {profit && (
+            <div className="rounded-xl border bg-white p-4 text-sm" data-testid="order-profit-card">
+              <div className="mb-3 flex items-center justify-between font-semibold">
+                <span>Profit (internal)</span>
+                <Badge className={profit.realized ? "bg-forest-light text-forest" : "bg-amber-100 text-amber-700"}>{profit.realized ? "Realized" : "In progress"}</Badge>
+              </div>
+              <Row l="Gross product sales" v={inr(profit.gross_product_sales)} />
+              {profit.product_discount > 0 && <Row l="Product discount" v={`- ${inr(profit.product_discount)}`} muted />}
+              {profit.coupon_discount > 0 && <Row l="Coupon discount" v={`- ${inr(profit.coupon_discount)}`} muted />}
+              <Row l="Net product revenue" v={inr(profit.net_product_revenue)} bold />
+              <Row l="Total purchase cost" v={`- ${inr(profit.purchase_cost)}`} />
+              <Row l="Gross product profit" v={inr(profit.gross_product_profit)} />
+              <Row l="Delivery charge collected" v={`+ ${inr(profit.delivery_charge_collected)}`} />
+              <Row l="Actual delivery cost" v={`- ${inr(profit.delivery_cost)}`} />
+              {profit.refunded > 0 && <Row l="Refunds" v={`- ${inr(profit.refunded)}`} muted />}
+              {profit.gst_enabled && <Row l={`GST collected (excluded)`} v={inr(profit.gst_collected)} muted />}
+              <div className="my-2 border-t" />
+              <Row l="Order net profit" v={inr(profit.refunded > 0 ? profit.net_profit_after_refund : profit.order_net_profit)} bold />
+              <div className="flex justify-between py-0.5"><span className="text-slate-500">Order profit margin</span><span className="font-bold text-forest" data-testid="order-margin">{profit.order_profit_margin_pct}%</span></div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3">
+                <div><Label className="text-xs">Delivery charge collected (₹)</Label><Input type="number" className="h-8" value={delCharge} onChange={(e) => setDelCharge(e.target.value)} data-testid="delivery-charge-input" /></div>
+                <div><Label className="text-xs">Actual delivery cost (₹)</Label><Input type="number" className="h-8" value={delCost} onChange={(e) => setDelCost(e.target.value)} data-testid="delivery-cost-input" /></div>
+              </div>
+              <Button size="sm" className="mt-2 h-8 w-full bg-forest hover:bg-forest-dark" onClick={saveDelivery} data-testid="save-delivery-cost-btn">Save delivery cost</Button>
+              <p className="mt-1 text-[11px] text-slate-400">Purchase cost &amp; profit are admin-only and never shown to customers.</p>
+            </div>
+          )}
 
           <div className="rounded-xl border bg-white p-4">
             <Label>Update internal status</Label>

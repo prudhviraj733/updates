@@ -201,6 +201,7 @@ class PinCodeInput(BaseModel):
     discount_type: Optional[str] = None       # percentage | fixed | None
     discount_value: float = 0
     max_discount: Optional[float] = None
+    delivery_cost: Optional[float] = None      # actual delivery cost BestKart pays for this PIN (auto-fills orders)
     notes: Optional[str] = ""
 
 
@@ -253,6 +254,7 @@ class InventoryBatchInput(BaseModel):
     pincode: Optional[str] = None
     batch_number: str
     quantity: int
+    purchase_price: Optional[float] = None   # purchase cost per unit for this batch (for inventory valuation)
     expiry_date: Optional[str] = None
     low_stock_threshold: Optional[int] = None
 
@@ -384,6 +386,11 @@ class OrderInput(BaseModel):
 
 class OrderStatusUpdate(BaseModel):
     status: str
+
+
+class OrderDeliveryCostInput(BaseModel):
+    delivery_cost: Optional[float] = None      # actual delivery cost paid (admin recorded)
+    delivery_charge: Optional[float] = None    # delivery charge collected (admin override)
 
 
 class OrderTrackingInput(BaseModel):

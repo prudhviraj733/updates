@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const EMPTY = {
   pincode: "", location_id: "", area_name: "", is_serviceable: true, express_enabled: false, express_charge: "",
-  min_order_value: 0, delivery_charge: "", free_delivery_threshold: "", discount_type: "none",
+  min_order_value: 0, delivery_charge: "", delivery_cost: "", free_delivery_threshold: "", discount_type: "none",
   discount_value: 0, max_discount: "", notes: "",
 };
 
@@ -37,6 +37,7 @@ export default function AdminPinCodes() {
       ...form,
       min_order_value: Number(form.min_order_value) || 0,
       delivery_charge: form.delivery_charge === "" ? null : Number(form.delivery_charge),
+      delivery_cost: form.delivery_cost === "" ? null : Number(form.delivery_cost),
       express_charge: form.express_charge === "" ? null : Number(form.express_charge),
       free_delivery_threshold: form.free_delivery_threshold === "" ? null : Number(form.free_delivery_threshold),
       discount_type: form.discount_type === "none" ? null : form.discount_type,
@@ -72,7 +73,7 @@ export default function AdminPinCodes() {
                 <td className="p-3">{p.discount_type ? `${p.discount_value}${p.discount_type === "percentage" ? "%" : "₹"}` : "—"}</td>
                 <td className="p-3">{p.is_serviceable ? <Badge className="bg-forest-light text-forest">Serviceable</Badge> : <Badge variant="secondary">Not serviceable</Badge>}</td>
                 <td className="p-3 text-right">
-                  <button className="mr-3" onClick={() => { setEditing(p); setForm({ ...p, delivery_charge: p.delivery_charge ?? "", free_delivery_threshold: p.free_delivery_threshold ?? "", express_enabled: p.express_enabled ?? false, express_charge: p.express_charge ?? "", discount_type: p.discount_type || "none", max_discount: p.max_discount ?? "" }); setOpen(true); }} data-testid={`edit-pincode-${p.id}`}><Pencil className="h-4 w-4 text-slate-500 hover:text-forest" /></button>
+                  <button className="mr-3" onClick={() => { setEditing(p); setForm({ ...p, delivery_charge: p.delivery_charge ?? "", delivery_cost: p.delivery_cost ?? "", free_delivery_threshold: p.free_delivery_threshold ?? "", express_enabled: p.express_enabled ?? false, express_charge: p.express_charge ?? "", discount_type: p.discount_type || "none", max_discount: p.max_discount ?? "" }); setOpen(true); }} data-testid={`edit-pincode-${p.id}`}><Pencil className="h-4 w-4 text-slate-500 hover:text-forest" /></button>
                   <button onClick={() => del(p.id)} data-testid={`delete-pincode-${p.id}`}><Trash2 className="h-4 w-4 text-slate-500 hover:text-destructive" /></button>
                 </td>
               </tr>
@@ -99,6 +100,7 @@ export default function AdminPinCodes() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Min order value (₹)</Label><Input type="number" value={form.min_order_value} onChange={(e) => setForm({ ...form, min_order_value: e.target.value })} /></div>
               <div><Label>Normal delivery charge (₹)</Label><Input type="number" placeholder="Default" value={form.delivery_charge} onChange={(e) => setForm({ ...form, delivery_charge: e.target.value })} /></div>
+              <div><Label>Actual delivery cost (₹)</Label><Input type="number" data-testid="pincode-delivery-cost" placeholder="What you pay (optional)" value={form.delivery_cost} onChange={(e) => setForm({ ...form, delivery_cost: e.target.value })} /></div>
             </div>
             <div>
               <Label>PIN-specific discount</Label>
